@@ -4,11 +4,10 @@
 set -e
 
 BULLET=false
-COVERAGE=false
+
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --bullet) BULLET=true ;;
-    	--coverage) COVERAGE=true ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -31,10 +30,6 @@ cd build_js
 
 
 EXE_LINKER_FLAGS="-s USE_WEBGL2=1"
-_CXX_FLAGS="-s FORCE_FILESYSTEM=1 -s ALLOW_MEMORY_GROWTH=1"
-if ${COVERAGE};
-then _CXX_FLAGS="${_CXX_FLAGS} --coverage"
-fi;
 cmake ../src \
     -DCORRADE_RC_EXECUTABLE=../build_corrade-rc/RelWithDebInfo/bin/corrade-rc \
     -DBUILD_GUI_VIEWERS=ON \
@@ -46,7 +41,7 @@ cmake ../src \
     -DCMAKE_PREFIX_PATH="$EMSCRIPTEN" \
     -DCMAKE_TOOLCHAIN_FILE="../src/deps/corrade/toolchains/generic/Emscripten-wasm.cmake" \
     -DCMAKE_INSTALL_PREFIX="." \
-    -DCMAKE_CXX_FLAGS="${_CXX_FLAGS}" \
+    -DCMAKE_CXX_FLAGS="-s FORCE_FILESYSTEM=1 -s ALLOW_MEMORY_GROWTH=1" \
     -DCMAKE_EXE_LINKER_FLAGS="${EXE_LINKER_FLAGS}" \
     -DBUILD_WITH_BULLET="$( if ${BULLET} ; then echo ON ; else echo OFF; fi )"
 
