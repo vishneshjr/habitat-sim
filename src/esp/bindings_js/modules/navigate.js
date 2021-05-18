@@ -47,7 +47,7 @@ class NavigateTask {
           left: scopeInsetX,
           top: scopeInsetY,
           right: scopeInsetX + scopeWidth,
-          bottom: scopeInsetY + scopeHeight
+          bottom: scopeInsetY + scopeHeight,
         };
         this.objectSensor = new ObjectSensor(
           objectSearchRect,
@@ -57,7 +57,7 @@ class NavigateTask {
         );
       }
 
-      components.canvas.onmousedown = e => {
+      components.canvas.onmousedown = (e) => {
         this.handleMouseDown(e);
       };
     }
@@ -72,7 +72,7 @@ class NavigateTask {
       { name: "turnLeft", key: "a" },
       { name: "turnRight", key: "d" },
       { name: "lookUp", key: "ArrowUp" },
-      { name: "lookDown", key: "ArrowDown" }
+      { name: "lookDown", key: "ArrowDown" },
     ];
   }
 
@@ -224,7 +224,7 @@ class NavigateTask {
   bindKeys() {
     document.addEventListener(
       "keydown",
-      event => {
+      (event) => {
         if (event.key === " " && this.objectSensor) {
           event.preventDefault();
           const iou = this.objectSensor.computeIOU(this.semanticData);

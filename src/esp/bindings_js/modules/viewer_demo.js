@@ -23,7 +23,7 @@ class ViewerDemo extends WebDemo {
   resetCanvasToCurrent() {
     this.currentResolution = {
       height: this.canvasElement.offsetHeight,
-      width: this.canvasElement.offsetWidth
+      width: this.canvasElement.offsetWidth,
     };
     // Make sure width for canvas is set properly
     this.resetCanvas(this.currentResolution);

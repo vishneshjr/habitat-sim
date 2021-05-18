@@ -5,7 +5,7 @@
 import {
   getServerAndURL,
   getBrowserAndPage,
-  closeBrowserAndServer
+  closeBrowserAndServer,
 } from "./test_utils.js";
 import { toMatchImageSnapshot } from "jest-image-snapshot";
 
@@ -31,6 +31,6 @@ test("viewer rendering should match the snapshot", async () => {
     // different images; differences on aliased edges may also stem from how
     // a particular importer parses transforms
     failureThreshold: 0.15,
-    failureThresholdType: "percent"
+    failureThresholdType: "percent",
   });
 });

@@ -5,7 +5,7 @@
 import {
   getServerAndURL,
   getBrowserAndPage,
-  closeBrowserAndServer
+  closeBrowserAndServer,
 } from "./test_utils.js";
 
 // It's impractical to directly test Habitat JS bindings here because of
@@ -21,13 +21,13 @@ test("JS test page should load successfully", async () => {
   );
   const { browser, page } = await getBrowserAndPage(null);
 
-  page.on("console", msg => {
+  page.on("console", (msg) => {
     for (let i = 0; i < msg.args().length; ++i) {
       console.log(`console event ${i}: ${msg.args()[i]}`);
     }
   });
 
-  page.on("pageerror", err => {
+  page.on("pageerror", (err) => {
     console.log("pageerror event: " + err);
   });
 

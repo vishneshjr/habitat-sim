@@ -165,11 +165,11 @@ class SimEnv {
       Module.SensorType.COLOR,
       Module.SensorType.DEPTH,
       Module.SensorType.SEMANTIC,
-      Module.SensorType.NORMAL
+      Module.SensorType.NORMAL,
     ]);
     const CameraSensorSubTypeSet = new Set([
       Module.SensorSubType.PINHOLE,
-      Module.SensorSubType.ORTHOGRAPHIC
+      Module.SensorSubType.ORTHOGRAPHIC,
     ]);
     if (
       VisualSensorTypeSet.has(config["sensorType"]) &&

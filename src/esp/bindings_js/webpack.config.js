@@ -23,7 +23,7 @@ const config = {
   entry: path.resolve(__dirname, "index.js"),
   output: {
     path: buildRootPath,
-    filename: "bundle.js"
+    filename: "bundle.js",
   },
   module: {
     rules: [
@@ -32,42 +32,42 @@ const config = {
       {
         test: /\.(js|ts)$/,
         exclude: /node_modules/,
-        use: ["babel-loader", "eslint-loader"]
+        use: ["babel-loader", "eslint-loader"],
       },
       // CSS Files
       {
         test: /\.css$/,
-        use: ["style-loader", "css-loader"]
-      }
-    ]
+        use: ["style-loader", "css-loader"],
+      },
+    ],
   },
   // No need to add .js at the end of the module names with this
   resolve: {
-    extensions: [".js", ".ts"]
+    extensions: [".js", ".ts"],
   },
   plugins: [
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "bindings.html"),
       filename: path.resolve(buildRootPath, "bindings.html"),
-      hash: true
+      hash: true,
     }),
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "test_page.html"),
       filename: path.resolve(buildRootPath, "test_page.html"),
-      hash: true
+      hash: true,
     }),
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "webvr.html"),
       filename: path.resolve(buildRootPath, "webvr.html"),
-      hash: true
+      hash: true,
     }),
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, "viewer.html"),
       filename: path.resolve(buildRootPath, "viewer.html"),
-      hash: true
-    })
+      hash: true,
+    }),
   ],
-  devtool: "source-map"
+  devtool: "source-map",
 };
 
 module.exports = config;

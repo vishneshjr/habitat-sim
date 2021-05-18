@@ -13,7 +13,7 @@ import { infoSemanticFileName } from "./defaults";
 export function throttle(func, timeout = 500) {
   let active = false;
 
-  return function() {
+  return function () {
     const args = arguments;
     const context = this;
     if (!active) {

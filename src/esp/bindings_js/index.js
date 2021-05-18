@@ -13,7 +13,7 @@ import {
   checkWebAssemblySupport,
   checkWebgl2Support,
   getInfoSemanticUrl,
-  buildConfigFromURLParameters
+  buildConfigFromURLParameters,
 } from "./modules/utils";
 import TestPage from "./modules/test_page";
 
@@ -62,7 +62,7 @@ Module.preRun.push(() => {
   }
 });
 
-Module.onRuntimeInitialized = async function() {
+Module.onRuntimeInitialized = async function () {
   console.log("hsim_bindings initialized");
 
   if (window.isTestPage) {

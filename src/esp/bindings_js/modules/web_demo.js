@@ -6,7 +6,7 @@
 import {
   defaultAgentConfig,
   defaultEpisode,
-  defaultResolution
+  defaultResolution,
 } from "./defaults";
 import SimEnv from "./simenv_embind";
 import TopDownMap from "./topdown";
@@ -52,7 +52,7 @@ class WebDemo {
       semantic: document.getElementById("semantic"),
       radar: document.getElementById("radar"),
       scope: document.getElementById("scope"),
-      status: document.getElementById("status")
+      status: document.getElementById("status"),
     });
 
     this.task.init();
@@ -64,26 +64,26 @@ class WebDemo {
       {
         uuid: "rgb",
         sensorType: Module.SensorType.COLOR,
-        sensorSubType: Module.SensorSubType.PINHOLE
+        sensorSubType: Module.SensorSubType.PINHOLE,
       },
       {
         uuid: "left_eye",
         sensorType: Module.SensorType.COLOR,
         sensorSubType: Module.SensorSubType.PINHOLE,
-        resolution: [1024, 1024]
+        resolution: [1024, 1024],
       },
       {
         uuid: "right_eye",
         sensorType: Module.SensorType.COLOR,
         sensorSubType: Module.SensorSubType.PINHOLE,
-        resolution: [1024, 1024]
+        resolution: [1024, 1024],
       },
       {
         uuid: "semantic",
         sensorType: Module.SensorType.SEMANTIC,
         sensorSubType: Module.SensorSubType.PINHOLE,
-        channels: 1
-      }
+        channels: 1,
+      },
     ];
 
     agentConfig.sensorSpecifications = sensorConfigs;
@@ -98,11 +98,11 @@ class WebDemo {
   }
 
   updateAgentConfigWithResolution(agentConfig) {
-    agentConfig.sensorSpecifications.forEach(sensorConfig => {
+    agentConfig.sensorSpecifications.forEach((sensorConfig) => {
       if (sensorConfig.resolution === undefined) {
         sensorConfig.resolution = [
           this.currentResolution.height,
-          this.currentResolution.width
+          this.currentResolution.width,
         ];
       }
     });

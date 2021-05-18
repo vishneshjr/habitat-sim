@@ -9,7 +9,7 @@ import { defaultAgentConfig } from "./defaults";
 const BUTTON_ID = "vr_button";
 
 const VIEW_SENSORS = ["left_eye", "right_eye"];
-const pointToArray = p => [p.x, p.y, p.z, p.w];
+const pointToArray = (p) => [p.x, p.y, p.z, p.w];
 
 ///////////
 // INPUT //
@@ -119,18 +119,7 @@ class VRDemo extends WebDemo {
 
     // Vertices
     const verts = [
-      -1.0,
-      1.0,
-      0.0,
-      -1.0,
-      -1.0,
-      0.0,
-      1.0,
-      -1.0,
-      0.0,
-      1.0,
-      1.0,
-      0.0
+      -1.0, 1.0, 0.0, -1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0, 0.0,
     ];
     const vertBuf = this.gl.createBuffer();
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, vertBuf);
@@ -178,13 +167,13 @@ class VRDemo extends WebDemo {
   async enterVR() {
     if (this.gl === null) {
       this.gl = document.createElement("canvas").getContext("webgl", {
-        xrCompatible: true
+        xrCompatible: true,
       });
       this.initSensors();
       this.initGL();
     }
     this.webXRSession = await navigator.xr.requestSession("immersive-vr", {
-      requiredFeatures: ["local-floor"]
+      requiredFeatures: ["local-floor"],
     });
 
     this.webXRSession.addEventListener("end", () => {
@@ -290,7 +279,7 @@ class VRDemo extends WebDemo {
         const fwdHeld = inputSource.gamepad.axes[FWD_AXIS] < -0.5;
         if (fwdHeld && !this.prevFwdHeld) {
           this.task.handleAction("moveForward");
-          window.setTimeout(function() {
+          window.setTimeout(function () {
             demo.prevFwdHeld = false;
           }, REPEAT_TIMEOUT);
         }
@@ -299,7 +288,7 @@ class VRDemo extends WebDemo {
         const leftHeld = inputSource.gamepad.axes[LEFT_RIGHT_AXIS] > 0.5;
         if (leftHeld && !this.prevleftHeld) {
           this.viewYawOffset += VIEW_YAW_STEP;
-          window.setTimeout(function() {
+          window.setTimeout(function () {
             demo.prevLeftHeld = false;
           }, REPEAT_TIMEOUT);
         }
@@ -308,7 +297,7 @@ class VRDemo extends WebDemo {
         const rightHeld = inputSource.gamepad.axes[LEFT_RIGHT_AXIS] < -0.5;
         if (rightHeld && !this.prevRightHeld) {
           this.viewYawOffset -= VIEW_YAW_STEP;
-          window.setTimeout(function() {
+          window.setTimeout(function () {
             demo.prevRightHeld = false;
           }, REPEAT_TIMEOUT);
         }
