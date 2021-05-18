@@ -8,10 +8,10 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 // Parse the args
 const args = require("minimist")(process.argv.slice(2));
 
-if (!args.build_dir) {
-  console.log("Specifying --build_dir option is required");
-  process.exit(1);
-}
+//if (!args.output_dir) {
+//  console.log("Specifying --build_dir option is required");
+//  process.exit(1);
+//}
 
 // All of the files will be outputted in build_dir argument passed
 // from command line

@@ -79,7 +79,7 @@ set(
 add_custom_command(
   OUTPUT bundle.js
   COMMAND npm run lint-fix
-  COMMAND npm run build -- --build_dir ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND npm run build -- -o ${CMAKE_CURRENT_BINARY_DIR}
   DEPENDS hsim_bindings ${bundle_files} empty.stamp
   WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
   COMMENT "Building JS files now"
