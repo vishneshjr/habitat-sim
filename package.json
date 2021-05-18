@@ -4,6 +4,7 @@
   "description": "A high performance simulator for training embodied agents",
   "devDependencies": {
     "@babel/core": "^7.14.3",
+    "@babel/eslint-parser": "^7.14.3",
     "@babel/node": "^7.14.2",
     "@babel/plugin-proposal-class-properties": "^7.13.0",
     "@babel/plugin-transform-runtime": "^7.14.3",
@@ -12,7 +13,6 @@
     "@babel/runtime": "^7.14.0",
     "@typescript-eslint/eslint-plugin": "^4.24.0",
     "@typescript-eslint/parser": "^4.24.0",
-    "babel-eslint": "^10.0.3",
     "babel-loader": "^8.2.2",
     "babel-plugin-transform-es2015-modules-commonjs": "^6.26.2",
     "css-loader": "^5.2.4",
