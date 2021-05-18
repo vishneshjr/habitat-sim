@@ -23,7 +23,7 @@
     "curly": "warn",
     "prettier/prettier": "error"
   },
-  "parser": "babel-eslint",
+  "parser": "@babel/eslint-parser",
   // Taken from create-react-app's eslint configuration
   "overrides": [
     {
