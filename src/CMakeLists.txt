@@ -88,8 +88,9 @@ if(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
       include(ProcessorCount)
       ProcessorCount(N_LTO_JOBS)
-      set(CMAKE_CXX_COMPILE_OPTIONS_IPO ${CMAKE_CXX_COMPILE_OPTIONS_IPO}
-                                        -flto=${N_LTO_JOBS}
+      # Force parallel LTO
+      string(REPLACE "<LINK_FLAGS>" "<LINK_FLAGS> -flto=${N_LTO_JOBS}"
+                     CMAKE_CXX_LINK_EXECUTABLE "${CMAKE_CXX_LINK_EXECUTABLE}"
       )
       #add_compile_options(-flto=${N_LTO_JOBS})
     endif()
