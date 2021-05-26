@@ -18,6 +18,7 @@
 #include "esp/nav/PathFinder.h"
 #include "esp/physics/PhysicsManager.h"
 #include "esp/physics/RigidObject.h"
+#include "esp/physics/objectManagers/RigidObjectManager.h"
 #include "esp/scene/SceneManager.h"
 #include "esp/scene/SceneNode.h"
 #include "esp/sensor/Sensor.h"
@@ -27,7 +28,7 @@
 namespace esp {
 namespace nav {
 class PathFinder;
-class NavMeshSettings;
+struct NavMeshSettings;
 class ActionSpacePathFinder;
 }  // namespace nav
 namespace scene {
@@ -73,6 +74,8 @@ class Simulator {
     return semanticScene_;
   }
 
+  bool semanticSceneExists() const { return (semanticScene_ != nullptr); }
+
   scene::SceneGraph& getActiveSceneGraph();
   scene::SceneGraph& getActiveSemanticSceneGraph();
 
@@ -100,15 +103,15 @@ class Simulator {
    * @brief Return manager for construction and access to asset attributes for
    * the current dataset.
    */
-  const metadata::managers::AssetAttributesManager::ptr
-  getAssetAttributesManager() const {
+  metadata::managers::AssetAttributesManager::ptr getAssetAttributesManager()
+      const {
     return metadataMediator_->getAssetAttributesManager();
   }
   /**
    * @brief Return manager for construction and access to light attributes and
    * layouts for the current dataset.
    */
-  const metadata::managers::LightLayoutAttributesManager::ptr
+  metadata::managers::LightLayoutAttributesManager::ptr
   getLightLayoutAttributesManager() const {
     return metadataMediator_->getLightLayoutAttributesManager();
   }
@@ -117,15 +120,15 @@ class Simulator {
    * @brief Return manager for construction and access to object attributes and
    * layouts for the current dataset.
    */
-  const metadata::managers::ObjectAttributesManager::ptr
-  getObjectAttributesManager() const {
+  metadata::managers::ObjectAttributesManager::ptr getObjectAttributesManager()
+      const {
     return metadataMediator_->getObjectAttributesManager();
   }
   /**
    * @brief Return manager for construction and access to physics world
    * attributes.
    */
-  const metadata::managers::PhysicsAttributesManager::ptr
+  metadata::managers::PhysicsAttributesManager::ptr
   getPhysicsAttributesManager() const {
     return metadataMediator_->getPhysicsAttributesManager();
   }
@@ -133,8 +136,8 @@ class Simulator {
    * @brief Return manager for construction and access to scene attributes for
    * the current dataset.
    */
-  const metadata::managers::StageAttributesManager::ptr
-  getStageAttributesManager() const {
+  metadata::managers::StageAttributesManager::ptr getStageAttributesManager()
+      const {
     return metadataMediator_->getStageAttributesManager();
   }
 
@@ -222,16 +225,17 @@ class Simulator {
    * Use this to query the object's properties when it was initialized.
    * Object pointed at by pointer is const, and can not be modified.
    */
-  const metadata::attributes::ObjectAttributes::cptr
-  getObjectInitializationTemplate(int objectId, int sceneID = 0) const;
+  metadata::attributes::ObjectAttributes::cptr getObjectInitializationTemplate(
+      int objectId,
+      int sceneID = 0) const;
 
   /**
    * @brief Get a copy of a stage's template when the stage was instanced.
    *
    * Use this to query the stage's properties when it was initialized.
    */
-  const metadata::attributes::StageAttributes::cptr
-  getStageInitializationTemplate(int sceneID = 0) const;
+  metadata::attributes::StageAttributes::cptr getStageInitializationTemplate(
+      int sceneID = 0) const;
 
   /**
    * @brief Remove an instanced object by ID. See @ref
@@ -276,9 +280,8 @@ class Simulator {
    * esp::physics::PhysicsManager::existingObjects_.
    * @param sceneID !! Not used currently !! Specifies which physical scene to
    * query.
-   * @return whether or not the set was successful.
    */
-  bool setObjectMotionType(const esp::physics::MotionType& motionType,
+  void setObjectMotionType(const esp::physics::MotionType& motionType,
                            int objectID,
                            int sceneID = 0);
 
@@ -491,7 +494,7 @@ class Simulator {
    *
    * Assumes the new @ref esp::gfx::Drawable for the bounding box should be
    * added to the active @ref esp::gfx::SceneGraph's default drawable group. See
-   * @ref esp::gfx::SceneGraph::getDrawables().
+   * @ref esp::gfx::SceneGraph::getDrawableGroup().
    *
    * @param drawBB Whether or not the render the bounding box.
    * @param objectID The object ID and key identifying the object in @ref
@@ -500,6 +503,85 @@ class Simulator {
    * the object.
    */
   void setObjectBBDraw(bool drawBB, int objectID, int sceneID = 0);
+
+#ifdef ESP_BUILD_WITH_VHACD
+  /**
+   * @brief Creates a voxelization for a particular object. Initializes the
+   * voxelization with a boundary voxel grid using VHACD's voxelization library.
+   *
+   * @param objectID The object ID and key identifying the object in @ref
+   * esp::physics::PhysicsManager::existingObjects_.
+   * @param resolution The approximate number of voxels for the voxel grid that
+   * is created.
+   */
+  void createObjectVoxelization(int objectID, int resolution = 1000000);
+#endif
+
+  /**
+   * @brief Turn on/off rendering for the voxel grid of the object's visual
+   * component.
+   *
+   * If a voxel grid for the object has not been created, it will make one with
+   * default arguments using @ref createObjectVoxelization().
+   *
+   * @param drawV Whether or not the render the voxel grid.
+   * @param objectID The object ID and key identifying the object in @ref
+   * esp::physics::PhysicsManager::existingObjects_.
+   * @param gridName The name of the voxel grid to be visualized.
+   */
+  void setObjectVoxelizationDraw(bool drawV,
+                                 int objectID,
+                                 const std::string& gridName = "Boundary");
+
+  /**
+   * @brief Returns the VoxelWrapper for a particular object.
+   *
+   * @param objectID The object ID and key identifying the object in @ref
+   * esp::physics::PhysicsManager::existingObjects_.
+   * @return A shared ptr to the object's VoxelWrapper .
+   */
+  std::shared_ptr<esp::geo::VoxelWrapper> getObjectVoxelization(int objectID);
+
+#ifdef ESP_BUILD_WITH_VHACD
+  /**
+   * @brief Creates a voxelization for the scene. Initializes the voxelization
+   * with a boundary voxel grid using VHACD's voxelization library.
+   *
+   * @param resolution The approximate number of voxels for the voxel grid that
+   * is created.
+   */
+  void createStageVoxelization(int resolution = 1000000);
+#endif
+
+  /**
+   * @brief Turn on/off rendering for the voxel grid of the scene's visual
+   * component.
+   *
+   * If a voxel grid for the scene has not been created, it will make one with
+   * default arguments using @ref createStageVoxelization().
+   *
+   * @param drawV Whether or not the render the voxel grid.
+   * @param gridName The name of the voxel grid to be visualized.
+   */
+  void setStageVoxelizationDraw(bool drawV,
+                                const std::string& gridName = "Boundary");
+
+  /**
+   * @brief Returns the VoxelWrapper for a particular object.
+   * @return A shared ptr to the object's VoxelWrapper .
+   */
+  std::shared_ptr<esp::geo::VoxelWrapper> getStageVoxelization();
+
+  /**
+   * @brief Registers a voxel wrapper in a dictionary. This ensures that two
+   * assets with the same render asset handle and voxelization resolution share
+   * the same underlying Voxel Grid.
+   *
+   * @param voxelWrapper The voxel wrapper to be registered.
+   * @param key The name underwhich to register the voxel wrapper
+   */
+  void registerVoxelGrid(esp::geo::VoxelWrapper& voxelWrapper,
+                         const std::string& key);
 
   /**
    * @brief Set the @ref esp::scene::SceneNode::semanticId_ for all visual nodes
@@ -526,14 +608,40 @@ class Simulator {
   bool contactTest(int objectID, int sceneID = 0);
 
   /**
+   * @brief Perform discrete collision detection for the scene.
+   */
+  void performDiscreteCollisionDetection() {
+    physicsManager_->performDiscreteCollisionDetection();
+  };
+
+  /**
+   * @brief Query physics simulation implementation for contact point data from
+   * the most recent collision detection cache.
+   *
+   * @return a vector with each entry corresponding to a single contact point.
+   */
+  std::vector<esp::physics::ContactPointData> getPhysicsContactPoints() {
+    return physicsManager_->getContactPoints();
+  }
+
+  /**
+   * @brief Query the number of contact points that were active during the
+   * collision detection check.
+   *
+   * @return the number of active contact points.
+   */
+  int getPhysicsNumActiveContactPoints() {
+    return physicsManager_->getNumActiveContactPoints();
+  }
+
+  /**
    * @brief Set an object to collidable or not.
    */
-  bool setObjectIsCollidable(bool collidable, const int objectID) {
+  void setObjectIsCollidable(bool collidable, const int objectID) {
     if (sceneHasPhysics(activeSceneID_)) {
-      return physicsManager_->setObjectIsCollidable(objectID, collidable);
+      physicsManager_->setObjectIsCollidable(objectID, collidable);
     }
-    return false;
-  };
+  }
 
   /**
    * @brief Get whether or not an object is collision active.
@@ -543,17 +651,16 @@ class Simulator {
       return physicsManager_->getObjectIsCollidable(objectID);
     }
     return false;
-  };
+  }
 
   /**
    * @brief Set the stage to collidable or not.
    */
-  bool setStageIsCollidable(bool collidable) {
+  void setStageIsCollidable(bool collidable) {
     if (sceneHasPhysics(activeSceneID_)) {
-      return physicsManager_->setStageIsCollidable(collidable);
+      physicsManager_->setStageIsCollidable(collidable);
     }
-    return false;
-  };
+  }
 
   /**
    * @brief Get whether or not the stage is collision active.
@@ -563,7 +670,18 @@ class Simulator {
       return physicsManager_->getStageIsCollidable();
     }
     return false;
-  };
+  }
+
+  /**
+   * @brief returns the wrapper manager for the currently created rigid objects.
+   * @return RigidObject wrapper manager.
+   */
+  std::shared_ptr<esp::physics::RigidObjectManager> getRigidObjectManager() {
+    if (sceneHasPhysics(activeSceneID_)) {
+      return physicsManager_->getRigidObjectManager();
+    }
+    return nullptr;
+  }  // getRigidObjectManager
 
   /**
    * @brief Raycast into the collision world of a scene.
@@ -640,6 +758,25 @@ class Simulator {
    * @brief Query active state of the current NavMesh visualization.
    */
   bool isNavMeshVisualizationActive();
+
+  /**
+   * @brief Return a ref to a new drawables in the currently active scene, for
+   * object creation.  Eventually support multi-scene ID
+   * @param sceneID The scene to get the drawables for.  Currently not used.
+   */
+  inline esp::gfx::DrawableGroup& getDrawableGroup(
+      CORRADE_UNUSED const int sceneID) {
+    // TODO eventually use passed sceneID
+    return sceneManager_->getSceneGraph(activeSceneID_).getDrawables();
+  }
+
+  /**
+   * @brief Return a ref to a new drawables in the currently active scene, for
+   * object creation.
+   */
+  inline esp::gfx::DrawableGroup& getDrawableGroup() {
+    return getDrawableGroup(activeSceneID_);
+  }
 
   /**
    * @brief Compute a trajectory visualization for the passed points.
@@ -729,7 +866,7 @@ class Simulator {
    * @return            handle to sensor initialized
    *
    */
-  esp::sensor::Sensor::ptr addSensorToObject(
+  esp::sensor::Sensor& addSensorToObject(
       const int objectId,
       const esp::sensor::SensorSpec::ptr& sensorSpec);
 
@@ -766,6 +903,32 @@ class Simulator {
    */
   bool drawObservation(int agentId, const std::string& sensorId);
 
+  /**
+   * @brief visualize the undisplayable observations such as depth, semantic, to
+   * the frame buffer stored in the @ref SensorInfoVisualizer
+   * Note: it will not display the observation on the default frame buffer
+   * @param[in] agentId    Id of the agent for which the observation is to
+   *                   be returned
+   * @param[in] sensorId   Id of the sensor for which the observation is to
+   *                   be returned
+   * @param[in] colorMapOffset the offset of the color map
+   * @param[in] colorMapScale the scale of the color map
+   * See details in @ref TextureVisualizerShader::setColorMapTransformation for
+   * more info.
+   *
+   * NOTE: it assumes:
+   * -) it is a non-rgb sensor (such as a depth or semantic sensor);
+   * -) the drawObservation is called;
+   * -) when the render target is bound to the sensor, "VisualizeTexture" is
+   * enabled. See @ref Renderer::bindRenderTarget and @ref
+   * Renderer::RenderTargetBindingFlag for more info
+   * @return false if the sensor's observation cannot be visualized.
+   */
+  bool visualizeObservation(int agentId,
+                            const std::string& sensorId,
+                            float colorMapOffset,
+                            float colorMapScale);
+
   bool getAgentObservation(int agentId,
                            const std::string& sensorId,
                            sensor::Observation& observation);
@@ -793,7 +956,7 @@ class Simulator {
    * @brief Get status, whether frustum culling is enabled or not
    * @return true if enabled, otherwise false
    */
-  bool isFrustumCullingEnabled() { return frustumCulling_; }
+  bool isFrustumCullingEnabled() const { return frustumCulling_; }
 
   /**
    * @brief Get a copy of an existing @ref gfx::LightSetup by its key.
@@ -835,14 +998,10 @@ class Simulator {
    */
   core::Random::ptr random() { return random_; }
 
-  int getNumActiveContactPoints() {
-    return physicsManager_->getNumActiveContactPoints();
-  }
-
   /**
    * @brief Get this simulator's MetadataMediator
    */
-  const metadata::MetadataMediator::ptr getMetadataMediator() const {
+  metadata::MetadataMediator::ptr getMetadataMediator() const {
     return metadataMediator_;
   }
 
@@ -921,13 +1080,20 @@ class Simulator {
       const std::string& activeSceneName);
 
   /**
+   * @brief Instance all the objects in the scene based on the current active
+   * schene's scene instance configuration.
+   * @return whether object creation and placement is completed succesfully
+   */
+  bool instanceObjectsForActiveScene();
+
+  /**
    * @brief sample a random valid AgentState in passed agentState
    * @param agentState [out] The placeholder for the sampled agent state.
    */
   void sampleRandomAgentState(agent::AgentState& agentState);
 
   bool isValidScene(int sceneID) const {
-    return sceneID >= 0 && sceneID < sceneID_.size();
+    return sceneID >= 0 && static_cast<std::size_t>(sceneID) < sceneID_.size();
   }
 
   bool sceneHasPhysics(int sceneID) const {

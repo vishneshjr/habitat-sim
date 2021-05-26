@@ -31,6 +31,9 @@
 
 namespace esp {
 //! core physics simulation namespace
+namespace sim {
+class Simulator;
+}
 namespace physics {
 
 //! Holds information about one ray hit instance.
@@ -53,7 +56,7 @@ struct RaycastResults {
   std::vector<RayHitInfo> hits;
   esp::geo::Ray ray;
 
-  bool hasHits() { return hits.size() > 0; }
+  bool hasHits() const { return hits.size() > 0; }
 
   void sortByDistance() {
     std::sort(hits.begin(), hits.end(),
@@ -65,8 +68,38 @@ struct RaycastResults {
   ESP_SMART_POINTERS(RaycastResults)
 };
 
-// TODO: repurpose to manage multiple physical worlds. Currently represents
-// exactly one world.
+// based on Bullet b3ContactPointData
+struct ContactPointData {
+  int objectIdA = -2;  // stage is -1
+  int objectIdB = -2;
+  int linkIndexA = -1;  // -1 if not a multibody
+  int linkIndexB = -1;
+
+  Magnum::Vector3 positionOnAInWS;  // contact point location on object A, in
+                                    // world space coordinates
+  Magnum::Vector3 positionOnBInWS;  // contact point location on object B, in
+                                    // world space coordinates
+  Magnum::Vector3
+      contactNormalOnBInWS;  // the separating contact normal, pointing from
+                             // object B towards object A
+  double contactDistance =
+      0.0;  // negative number is penetration, positive is distance.
+
+  double normalForce = 0.0;
+
+  double linearFrictionForce1 = 0.0;
+  double linearFrictionForce2 = 0.0;
+  Magnum::Vector3 linearFrictionDirection1;
+  Magnum::Vector3 linearFrictionDirection2;
+
+  // the contact is considered active if at least one object is active (not
+  // asleep)
+  bool isActive = false;
+
+  ESP_SMART_POINTERS(ContactPointData)
+};
+
+class RigidObjectManager;
 
 /**
 @brief Kinematic and dynamic scene and object manager.
@@ -82,7 +115,7 @@ aware of (e.g. static scene collision geometry).
 Will later manager multiple physical scenes, but currently assumes only one
 unique physical world can exist.
 */
-class PhysicsManager {
+class PhysicsManager : public std::enable_shared_from_this<PhysicsManager> {
  public:
   //! ==== physics engines ====
 
@@ -91,26 +124,28 @@ class PhysicsManager {
   PhysicsManager. Each entry suggests a derived class of @ref PhysicsManager and
   @ref RigidObject implementing the specific interface to a simulation library.
   */
-  enum PhysicsSimulationLibrary {
+  enum class PhysicsSimulationLibrary {
 
     /**
      * The default implemenation of kineamtics through the base @ref
-     * PhysicsManager class. Supports @ref MotionType::STATIC and @ref
-     * MotionType::KINEMATIC objects of base class @ref RigidObject. If the
-     * derived @ref PhysicsManager class for a desired @ref
+     * PhysicsManager class. Supports @ref esp::physics::MotionType::STATIC and
+     * @ref esp::physics::MotionType::KINEMATIC objects of base class @ref
+     * RigidObject. If the derived @ref PhysicsManager class for a desired @ref
      * PhysicsSimulationLibrary fails to initialize, it will default to @ref
-     * PhysicsSimulationLibrary::NONE.
+     * PhysicsSimulationLibrary::NoPhysics.
      */
-    NONE,
+    NoPhysics,
 
     /**
      * An implemenation of dynamics through the Bullet Physics library.
-     * Supports @ref MotionType::STATIC, @ref MotionType::KINEMATIC, and @ref
-     * MotionType::DYNAMIC objects of @ref RigidObject derived class @ref
-     * BulletRigidObject. Suggests the use of @ref PhysicsManager derived class
+     * Supports @ref esp::physics::MotionType::STATIC, @ref
+     * esp::physics::MotionType::KINEMATIC, and @ref
+     * esp::physics::MotionType::DYNAMIC objects of @ref RigidObject derived
+     * class @ref BulletRigidObject. Suggests the use of @ref PhysicsManager
+     * derived class
      * @ref BulletPhysicsManager
      */
-    BULLET
+    Bullet
   };
 
   /**
@@ -119,24 +154,30 @@ class PhysicsManager {
    *
    * @param _resourceManager The @ref esp::assets::ResourceManager which
    * tracks the assets this
+   * @param _physicsManagerAttributes The PhysicsManagerAttributes template used
+   * to instantiate this physics manager.
    * @ref PhysicsManager will have access to.
    */
   explicit PhysicsManager(
       assets::ResourceManager& _resourceManager,
       const metadata::attributes::PhysicsManagerAttributes::cptr&
-          _physicsManagerAttributes)
-      : resourceManager_(_resourceManager),
-        physicsManagerAttributes_(_physicsManagerAttributes){};
+          _physicsManagerAttributes);
 
   /** @brief Destructor*/
   virtual ~PhysicsManager();
 
   /**
+   * @brief Set a pointer to this physics manager's owning simulator.
+   * */
+  void setSimulator(esp::sim::Simulator* _simulator) {
+    simulator_ = _simulator;
+  }
+
+  /**
    * @brief Initialization: load physical properties and setup the world.
-   *
-   *
-   * @param node    The scene graph node which will act as the parent of all
+   * @param node  The scene graph node which will act as the parent of all
    * physical scene and object nodes.
+   * @param physMgr Simulator's shared pointer referencing this physics manager.
    */
   bool initPhysics(scene::SceneNode* node);
 
@@ -157,48 +198,150 @@ class PhysicsManager {
    * Only one 'scene' may be initialized per simulated world, but this scene may
    * contain several components (e.g. GLB heirarchy).
    *
-   * @param handle The handle to the attributes structure defining physical
-   * properties of the scene.
+   * @param initAttributes The attributes structure defining physical
+   * properties of the scene.  Must be a copy of the attributes stored in the
+   * Attributes Manager.
    * @param meshGroup collision meshs for the scene.
    * @return true if successful and false otherwise
    */
-  bool addStage(const std::string& handle,
-                const std::vector<assets::CollisionMeshData>& meshGroup);
+  bool addStage(
+      const metadata::attributes::StageAttributes::ptr& initAttributes,
+      const std::vector<assets::CollisionMeshData>& meshGroup);
 
-  /** @brief Instance a physical object from an object properties template in
-   * the @ref esp::metadata::managers::ObjectAttributesManager.
-   *  @anchor addObject_string
-   *  @param configFile The filename of the object's physical properties file
-   * used as the key to query @ref
-   * esp::metadata::managers::ObjectAttributesManager.
-   *  @param drawables Reference to the scene graph drawables group to enable
-   * rendering of the newly initialized object.
-   *  @param attachmentNode If supplied, attach the new physical object to an
+  /**
+   * @brief Instance and place a physics object from a @ref
+   * esp::metadata::attributes::SceneObjectInstanceAttributes file.
+   * @param objInstAttributes The attributes that describe the desired state to
+   * set this object.
+   * @param attributesHandle The handle of the object attributes used as the key
+   * to query @ref esp::metadata::managers::ObjectAttributesManager.
+   * @param defaultCOMCorrection The default value of whether COM-based
+   * translation correction needs to occur.
+   * @param attachmentNode If supplied, attach the new physical object to an
    * existing SceneNode.
-   *  @return the instanced object's ID, mapping to it in @ref
+   * @param lightSetup The string name of the desired lighting setup to use.
+   * @return the instanced object's ID, mapping to it in @ref
    * PhysicsManager::existingObjects_ if successful, or @ref esp::ID_UNDEFINED.
    */
-  int addObject(const std::string& configFile,
-                DrawableGroup* drawables,
+  int addObjectInstance(
+      const esp::metadata::attributes::SceneObjectInstanceAttributes::ptr&
+          objInstAttributes,
+      const std::string& attributesHandle,
+      bool defaultCOMCorrection = false,
+      scene::SceneNode* attachmentNode = nullptr,
+      const std::string& lightSetup = DEFAULT_LIGHTING_KEY);
+
+  /** @brief Instance a physical object from an object properties template in
+   * the @ref esp::metadata::managers::ObjectAttributesManager.  This method
+   * will query for a drawable group from simulator.
+   *
+   * @param attributesHandle The handle of the object attributes used as the key
+   * to query @ref esp::metadata::managers::ObjectAttributesManager.
+   * @param attachmentNode If supplied, attach the new physical object to an
+   * existing SceneNode.
+   * @param lightSetup The string name of the desired lighting setup to use.
+   * @return the instanced object's ID, mapping to it in @ref
+   * PhysicsManager::existingObjects_ if successful, or @ref esp::ID_UNDEFINED.
+   */
+  int addObject(const std::string& attributesHandle,
                 scene::SceneNode* attachmentNode = nullptr,
                 const std::string& lightSetup = DEFAULT_LIGHTING_KEY);
 
   /** @brief Instance a physical object from an object properties template in
    * the @ref esp::metadata::managers::ObjectAttributesManager by template
-   * handle.
-   *  @param objectLibId The ID of the object's template in @ref
+   * ID.  This method will query for a drawable group from simulator.
+   *
+   * @param attributesID The ID of the object's template in @ref
    * esp::metadata::managers::ObjectAttributesManager
-   *  @param drawables Reference to the scene graph drawables group to enable
+   * @param drawables Reference to the scene graph drawables group to enable
    * rendering of the newly initialized object.
-   *  @param attachmentNode If supplied, attach the new physical object to an
+   * @param attachmentNode If supplied, attach the new physical object to an
    * existing SceneNode.
-   *  @return the instanced object's ID, mapping to it in @ref
+   * @param lightSetup The string name of the desired lighting setup to use.
+   * @return the instanced object's ID, mapping to it in @ref
    * PhysicsManager::existingObjects_ if successful, or @ref esp::ID_UNDEFINED.
    */
-  int addObject(const int objectLibId,
-                DrawableGroup* drawables,
+  int addObject(const int attributesID,
                 scene::SceneNode* attachmentNode = nullptr,
                 const std::string& lightSetup = DEFAULT_LIGHTING_KEY);
+
+  /** @brief Instance a physical object from an object properties template in
+   * the @ref esp::metadata::managers::ObjectAttributesManager.
+   *
+   * @param attributesHandle The handle of the object attributes used as the key
+   * to query @ref esp::metadata::managers::ObjectAttributesManager.
+   * @param drawables Reference to the scene graph drawables group to enable
+   * rendering of the newly initialized object.
+   * @param attachmentNode If supplied, attach the new physical object to an
+   * existing SceneNode.
+   * @param lightSetup The string name of the desired lighting setup to use.
+   * @return the instanced object's ID, mapping to it in @ref
+   * PhysicsManager::existingObjects_ if successful, or @ref esp::ID_UNDEFINED.
+   */
+  int addObject(const std::string& attributesHandle,
+                DrawableGroup* drawables,
+                scene::SceneNode* attachmentNode = nullptr,
+                const std::string& lightSetup = DEFAULT_LIGHTING_KEY) {
+    esp::metadata::attributes::ObjectAttributes::ptr attributes =
+        resourceManager_.getObjectAttributesManager()->getObjectCopyByHandle(
+            attributesHandle);
+    if (!attributes) {
+      LOG(ERROR) << "PhysicsManager::addObject : "
+                    "Object creation failed due to unknown attributes "
+                 << attributesHandle;
+      return ID_UNDEFINED;
+    }
+
+    return addObject(attributes, drawables, attachmentNode, lightSetup);
+  }  // addObject
+
+  /** @brief Instance a physical object from an object properties template in
+   * the @ref esp::metadata::managers::ObjectAttributesManager by template
+   * ID.
+   * @param attributesID The ID of the object's template in @ref
+   * esp::metadata::managers::ObjectAttributesManager
+   * @param drawables Reference to the scene graph drawables group to enable
+   * rendering of the newly initialized object.
+   * @param attachmentNode If supplied, attach the new physical object to an
+   * existing SceneNode.
+   * @param lightSetup The string name of the desired lighting setup to use.
+   * @return the instanced object's ID, mapping to it in @ref
+   * PhysicsManager::existingObjects_ if successful, or @ref esp::ID_UNDEFINED.
+   */
+  int addObject(const int attributesID,
+                DrawableGroup* drawables,
+                scene::SceneNode* attachmentNode = nullptr,
+                const std::string& lightSetup = DEFAULT_LIGHTING_KEY) {
+    const esp::metadata::attributes::ObjectAttributes::ptr attributes =
+        resourceManager_.getObjectAttributesManager()->getObjectCopyByID(
+            attributesID);
+    if (!attributes) {
+      LOG(ERROR) << "PhysicsManager::addObject : "
+                    "Object creation failed due to unknown attributes ID "
+                 << attributesID;
+      return ID_UNDEFINED;
+    }
+    return addObject(attributes, drawables, attachmentNode, lightSetup);
+  }  // addObject
+
+  /** @brief Instance a physical object from an object properties template in
+   * the @ref esp::metadata::managers::ObjectAttributesManager by template
+   * handle.
+   * @param objectAttributes The object's template in @ref
+   * esp::metadata::managers::ObjectAttributesManager.
+   * @param drawables Reference to the scene graph drawables group to enable
+   * rendering of the newly initialized object.
+   * @param attachmentNode If supplied, attach the new physical object to an
+   * existing SceneNode.
+   * @param lightSetup The string name of the desired lighting setup to use.
+   * @return the instanced object's ID, mapping to it in @ref
+   * PhysicsManager::existingObjects_ if successful, or @ref esp::ID_UNDEFINED.
+   */
+  int addObject(
+      const esp::metadata::attributes::ObjectAttributes::ptr& objectAttributes,
+      DrawableGroup* drawables,
+      scene::SceneNode* attachmentNode = nullptr,
+      const std::string& lightSetup = DEFAULT_LIGHTING_KEY);
 
   /** @brief Remove an object instance from the pysical scene by ID, destroying
    * its scene graph node and removing it from @ref
@@ -219,7 +362,7 @@ class PhysicsManager {
    * PhysicsManager::existingObjects_.
    *  @return The size of @ref PhysicsManager::existingObjects_.
    */
-  int getNumRigidObjects() const { return existingObjects_.size(); };
+  int getNumRigidObjects() const { return existingObjects_.size(); }
 
   /** @brief Get a list of existing object IDs (i.e., existing keys in @ref
    * PhysicsManager::existingObjects_.)
@@ -227,20 +370,20 @@ class PhysicsManager {
    */
   std::vector<int> getExistingObjectIDs() const {
     std::vector<int> v;
-    for (auto& bro : existingObjects_) {
+    v.reserve(existingObjects_.size());
+    for (const auto& bro : existingObjects_) {
       v.push_back(bro.first);
     }
     return v;
-  };
+  }
 
   /** @brief Set the @ref MotionType of an object, allowing or disallowing its
    * manipulation by dynamic processes or kinematic control.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param  mt The desired @ref MotionType of the object to set.
-   * @return True if set was successful and False otherwise.
    */
-  bool setObjectMotionType(const int physObjectID, MotionType mt);
+  void setObjectMotionType(const int physObjectID, MotionType mt);
 
   /** @brief Get the @ref MotionType of an object.
    * @param  physObjectID The object ID and key identifying the object in @ref
@@ -280,14 +423,14 @@ class PhysicsManager {
    * @return The increment of time, @ref fixedTimeStep_, by which the physical
    * world will advance.
    */
-  virtual double getTimestep() const { return fixedTimeStep_; };
+  virtual double getTimestep() const { return fixedTimeStep_; }
 
   /** @brief Get the current @ref worldTime_ of the physical world. See @ref
    * stepPhysics.
    * @return The amount of time, @ref worldTime_, by which the physical world
    * has advanced.
    */
-  virtual double getWorldTime() const { return worldTime_; };
+  virtual double getWorldTime() const { return worldTime_; }
 
   /** @brief Get the current gravity in the physical world. By default returns
    * [0,0,0] since their is no notion of force in a kinematic world.
@@ -301,7 +444,7 @@ class PhysicsManager {
    * geometry. See @ref staticStageObject_.
    * @return The scalar friction coefficient of the scene geometry.
    */
-  virtual double getStageFrictionCoefficient() const { return 0.0; };
+  virtual double getStageFrictionCoefficient() const { return 0.0; }
 
   /** @brief Set the friction coefficient of the scene collision geometry. See
    * @ref staticStageObject_.
@@ -309,7 +452,7 @@ class PhysicsManager {
    * geometry.
    */
   virtual void setStageFrictionCoefficient(
-      CORRADE_UNUSED const double frictionCoefficient){};
+      CORRADE_UNUSED const double frictionCoefficient) {}
 
   /** @brief Get the current coefficient of restitution for the scene collision
    * geometry. This determines the ratio of initial to final relative velocity
@@ -317,7 +460,7 @@ class PhysicsManager {
    * default this will always return 0, since kinametic scenes have no dynamics.
    * @return The scalar coefficient of restitution for the scene geometry.
    */
-  virtual double getStageRestitutionCoefficient() const { return 0.0; };
+  virtual double getStageRestitutionCoefficient() const { return 0.0; }
 
   /** @brief Set the coefficient of restitution for the scene collision
    * geometry. See @ref staticStageObject_. By default does nothing since
@@ -325,13 +468,13 @@ class PhysicsManager {
    * @param restitutionCoefficient The scalar coefficient of restitution to set.
    */
   virtual void setStageRestitutionCoefficient(
-      CORRADE_UNUSED const double restitutionCoefficient){};
+      CORRADE_UNUSED const double restitutionCoefficient) {}
 
   // ============ Object Transformation functions =============
 
   /** @brief Set the 4x4 transformation matrix of an object kinematically.
-   * Calling this during simulation of a @ref MotionType::DYNAMIC object is not
-   * recommended.
+   * Calling this during simulation of a @ref esp::physics::MotionType::DYNAMIC
+   * object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param trans The desired 4x4 transform of the object.
@@ -339,8 +482,8 @@ class PhysicsManager {
   void setTransformation(const int physObjectID, const Magnum::Matrix4& trans);
 
   /** @brief Set the @ref esp::core::RigidState of an object kinematically.
-   * Calling this during simulation of a @ref MotionType::DYNAMIC object is not
-   * recommended.
+   * Calling this during simulation of a @ref esp::physics::MotionType::DYNAMIC
+   * object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param trans The desired @ref esp::core::RigidState of the object.
@@ -349,8 +492,8 @@ class PhysicsManager {
                      const esp::core::RigidState& rigidState);
 
   /** @brief Set the 3D position of an object kinematically.
-   * Calling this during simulation of a @ref MotionType::DYNAMIC object is not
-   * recommended.
+   * Calling this during simulation of a @ref esp::physics::MotionType::DYNAMIC
+   * object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param vector The desired 3D position of the object.
@@ -358,8 +501,8 @@ class PhysicsManager {
   void setTranslation(const int physObjectID, const Magnum::Vector3& vector);
 
   /** @brief Set the orientation of an object kinematically.
-   * Calling this during simulation of a @ref MotionType::DYNAMIC object is not
-   * recommended.
+   * Calling this during simulation of a @ref esp::physics::MotionType::DYNAMIC
+   * object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param quaternion The desired orientation of the object.
@@ -375,8 +518,8 @@ class PhysicsManager {
   void resetTransformation(const int physObjectID);
 
   /** @brief Modify the 3D position of an object kinematically by translation.
-   * Calling this during simulation of a @ref MotionType::DYNAMIC object is not
-   * recommended.
+   * Calling this during simulation of a @ref esp::physics::MotionType::DYNAMIC
+   * object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param vector The desired 3D vector by which to translate the object.
@@ -385,7 +528,8 @@ class PhysicsManager {
 
   /** @brief Modify the 3D position of an object kinematically by translation
    * with a vector defined in the object's local coordinate system. Calling this
-   * during simulation of a @ref MotionType::DYNAMIC object is not recommended.
+   * during simulation of a @ref esp::physics::MotionType::DYNAMIC object is not
+   * recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param vector The desired 3D vector in the object's ocal coordiante system
@@ -407,7 +551,8 @@ class PhysicsManager {
 
   /** @brief Modify the orientation of an object kinematically by applying an
    * axis-angle rotation to it in the local coordinate system. Calling this
-   * during simulation of a @ref MotionType::DYNAMIC object is not recommended.
+   * during simulation of a @ref esp::physics::MotionType::DYNAMIC object is not
+   * recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param angleInRad The angle of rotation in radians.
@@ -420,7 +565,7 @@ class PhysicsManager {
 
   /** @brief Modify the orientation of an object kinematically by applying a
    * rotation to it about the global X axis. Calling this during simulation of a
-   * @ref MotionType::DYNAMIC object is not recommended.
+   * @ref esp::physics::MotionType::DYNAMIC object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param angleInRad The angle of rotation in radians.
@@ -429,7 +574,7 @@ class PhysicsManager {
 
   /** @brief Modify the orientation of an object kinematically by applying a
    * rotation to it about the global Y axis. Calling this during simulation of a
-   * @ref MotionType::DYNAMIC object is not recommended.
+   * @ref esp::physics::MotionType::DYNAMIC object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param angleInRad The angle of rotation in radians.
@@ -438,7 +583,7 @@ class PhysicsManager {
 
   /** @brief Modify the orientation of an object kinematically by applying a
    * rotation to it about the global Z axis. Calling this during simulation of a
-   * @ref MotionType::DYNAMIC object is not recommended.
+   * @ref esp::physics::MotionType::DYNAMIC object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param angleInRad The angle of rotation in radians.
@@ -447,7 +592,7 @@ class PhysicsManager {
 
   /** @brief Modify the orientation of an object kinematically by applying a
    * rotation to it about the local X axis. Calling this during simulation of a
-   * @ref MotionType::DYNAMIC object is not recommended.
+   * @ref esp::physics::MotionType::DYNAMIC object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param angleInRad The angle of rotation in radians.
@@ -456,7 +601,7 @@ class PhysicsManager {
 
   /** @brief Modify the orientation of an object kinematically by applying a
    * rotation to it about the local Y axis. Calling this during simulation of a
-   * @ref MotionType::DYNAMIC object is not recommended.
+   * @ref esp::physics::MotionType::DYNAMIC object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param angleInRad The angle of rotation in radians.
@@ -465,7 +610,7 @@ class PhysicsManager {
 
   /** @brief Modify the orientation of an object kinematically by applying a
    * rotation to it about the local Z axis. Calling this during simulation of a
-   * @ref MotionType::DYNAMIC object is not recommended.
+   * @ref esp::physics::MotionType::DYNAMIC object is not recommended.
    * @param  physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param angleInRad The angle of rotation in radians.
@@ -569,6 +714,25 @@ class PhysicsManager {
    */
   void setAngularDamping(const int physObjectID, const double angDamping);
 
+#ifdef ESP_BUILD_WITH_VHACD
+  /** @brief Initializes a new VoxelWrapper with a boundary voxelization using
+   * VHACD's voxelization libary and assigns it to a rigid body.
+   * @param  physObjectID The object ID and key identifying the object in @ref
+   * PhysicsManager::existingObjects_.
+   * @param resolution Represents the approximate number of voxels in the new
+   * voxelization.
+   */
+  void generateVoxelization(const int physObjectID,
+                            const int resolution = 1000000);
+
+  /** @brief Initializes a new VoxelWrapper with a boundary voxelization using
+   * VHACD's voxelization libary and assigns it to the stage's rigid body.
+   * @param resolution Represents the approximate number of voxels in the new
+   * voxelization.
+   */
+  void generateStageVoxelization(const int resolution = 1000000);
+#endif
+
   // ============ Object Getter functions =============
 
   /** @brief Get the mass of an object.
@@ -643,6 +807,19 @@ class PhysicsManager {
    */
   double getAngularDamping(const int physObjectID) const;
 
+  /** @brief Gets the VoxelWrapper associated with a rigid object.
+   * @param  physObjectID The object ID and key identifying the object in @ref
+   * PhysicsManager::existingObjects_.
+   * @return A pointer to the object's Voxel Wrapper.
+   */
+  std::shared_ptr<esp::geo::VoxelWrapper> getObjectVoxelization(
+      const int physObjectID) const;
+
+  /** @brief Gets the VoxelWrapper associated with the scene.
+   * @return A pointer to the scene's Voxel Wrapper.
+   */
+  std::shared_ptr<esp::geo::VoxelWrapper> getStageVoxelization() const;
+
   // ============= Platform dependent function =============
 
   /** @brief Get the scalar collision margin of an object.
@@ -653,7 +830,7 @@ class PhysicsManager {
    */
   virtual double getMargin(CORRADE_UNUSED const int physObjectID) const {
     return 0.0;
-  };
+  }
 
   /** @brief Set the scalar collision margin of an object.
    * See @ref BulletRigidObject::setMargin. Nothing is set if no implementation
@@ -663,7 +840,7 @@ class PhysicsManager {
    * @param  margin The desired collision margin for the object.
    */
   virtual void setMargin(CORRADE_UNUSED const int physObjectID,
-                         CORRADE_UNUSED const double margin){};
+                         CORRADE_UNUSED const double margin) {}
 
   // =========== Debug functions ===========
 
@@ -728,10 +905,11 @@ class PhysicsManager {
                           const Magnum::Vector3& impulse);
 
   /**
-   * @brief Set linear velocity for an object with @ref MotionType::DYNAMIC.
+   * @brief Set linear velocity for an object with @ref
+   * esp::physics::MotionType::DYNAMIC.
    *
-   * Does nothing for @ref MotionType::KINEMATIC or @ref MotionType::STATIC
-   * objects.
+   * Does nothing for @ref esp::physics::MotionType::KINEMATIC or @ref
+   * esp::physics::MotionType::STATIC objects.
    * @param physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param linVel Linear velocity to set.
@@ -739,10 +917,11 @@ class PhysicsManager {
   void setLinearVelocity(const int physObjectID, const Magnum::Vector3& linVel);
 
   /**
-   * @brief Set angular velocity for an object with @ref MotionType::DYNAMIC.
+   * @brief Set angular velocity for an object with @ref
+   * esp::physics::MotionType::DYNAMIC.
    *
-   * Does nothing for @ref MotionType::KINEMATIC or @ref MotionType::STATIC
-   * objects.
+   * Does nothing for @ref esp::physics::MotionType::KINEMATIC or @ref
+   * esp::physics::MotionType::STATIC objects.
    * @param physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @param angVel Angular velocity vector corresponding to world unit axis
@@ -752,10 +931,11 @@ class PhysicsManager {
                           const Magnum::Vector3& angVel);
 
   /**
-   * @brief Get linear velocity of an object with @ref MotionType::DYNAMIC.
+   * @brief Get linear velocity of an object with @ref
+   * esp::physics::MotionType::DYNAMIC.
    *
-   * Always zero for @ref MotionType::KINEMATIC or @ref MotionType::STATIC
-   * objects.
+   * Always zero for @ref esp::physics::MotionType::KINEMATIC or @ref
+   * esp::physics::MotionType::STATIC objects.
    * @param physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @return Linear velocity of the object.
@@ -763,10 +943,11 @@ class PhysicsManager {
   Magnum::Vector3 getLinearVelocity(const int physObjectID) const;
 
   /**
-   * @brief Get angular velocity of an object with @ref MotionType::DYNAMIC.
+   * @brief Get angular velocity of an object with @ref
+   * esp::physics::MotionType::DYNAMIC.
    *
-   * Always zero for @ref MotionType::KINEMATIC or @ref MotionType::STATIC
-   * objects.
+   * Always zero for @ref esp::physics::MotionType::KINEMATIC or @ref
+   * esp::physics::MotionType::STATIC objects.
    * @param physObjectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @return Angular velocity vector corresponding to world unit axis angles.
@@ -786,6 +967,27 @@ class PhysicsManager {
    */
   void setObjectBBDraw(int physObjectID, DrawableGroup* drawables, bool drawBB);
 
+  /** @brief Set the voxelization visualization for the object true or false.
+   * @param physObjectID The object ID and key identifying the object in @ref
+   * PhysicsManager::existingObjects_.
+   * @param gridName The voxel grid to be visualized.
+   * @param drawables The drawables group with which to render the voxelization.
+   * @param drawVoxelization Set rendering of the voxelization to true or false.
+   */
+  void setObjectVoxelizationDraw(int physObjectID,
+                                 const std::string& gridName,
+                                 DrawableGroup* drawables,
+                                 bool drawVoxelization);
+
+  /** @brief Set the voxelization visualization for the scene true or false.
+   * @param gridName The voxel grid to be visualized.
+   * @param drawables The drawables group with which to render the voxelization.
+   * @param drawVoxelization Set rendering of the voxelization to true or false.
+   */
+  void setStageVoxelizationDraw(const std::string& gridName,
+                                DrawableGroup* drawables,
+                                bool drawVoxelization);
+
   /**
    * @brief Get a const reference to the specified object's SceneNode for info
    * query purposes.
@@ -799,6 +1001,16 @@ class PhysicsManager {
   scene::SceneNode& getObjectSceneNode(int physObjectID);
 
   /**
+   * @brief Set the desired light setup by name for the passed object
+   * @param objectID The id of the object to set
+   * @param lightSetupKey The string name of the desired lighting setup to use.
+   */
+  void setObjectLightSetup(const int objectID,
+                           const std::string& lightSetupKey) {
+    existingObjects_.at(objectID)->setLightSetup(lightSetupKey);
+  }
+
+  /**
    * @brief Get a const reference to the specified object's visual SceneNode for
    * info query purposes.
    * @param physObjectID The object ID and key identifying the object in @ref
@@ -810,7 +1022,7 @@ class PhysicsManager {
   /**
    * @brief Get pointers to an object's visual SceneNodes.
    *
-   * @param physObjectID The object ID and key identifying the object in @ref
+   * @param objectID The object ID and key identifying the object in @ref
    * PhysicsManager::existingObjects_.
    * @return pointers to the object's visual scene nodes.
    */
@@ -842,32 +1054,68 @@ class PhysicsManager {
   };
 
   /**
-   * @brief Set an object to collidable or not.
+   * @brief Perform discrete collision detection for the scene with the derived
+   * PhysicsManager implementation. Not implemented for default @ref
+   * PhysicsManager. See @ref bullet::BulletPhysicsManager.
    */
-  bool setObjectIsCollidable(const int physObjectID, bool collidable) {
+  virtual void performDiscreteCollisionDetection() {
+    /*Does nothing in base PhysicsManager.*/
+  }
+
+  /**
+   * @brief Query the number of contact points that were active during the
+   * collision detection check.
+   *
+   * Not implemented for default PhysicsManager.
+   * @return the number of active contact points.
+   */
+  virtual int getNumActiveContactPoints() { return -1; }
+
+  /**
+   * @brief Query physics simulation implementation for contact point data from
+   * the most recent collision detection cache.
+   *
+   * Not implemented for default PhysicsManager implementation.
+   * @return a vector with each entry corresponding to a single contact point.
+   */
+  virtual std::vector<ContactPointData> getContactPoints() const { return {}; }
+
+  /**
+   * @brief Set an object to collidable or not.
+   *
+   * @param physObjectID The object ID and key identifying the object
+   */
+  void setObjectIsCollidable(const int physObjectID, bool collidable) {
     assertIDValidity(physObjectID);
-    return existingObjects_.at(physObjectID)->setCollidable(collidable);
-  };
+    existingObjects_.at(physObjectID)->setCollidable(collidable);
+  }
 
   /**
    * @brief Get whether or not an object is collision active.
+   *
+   * @param physObjectID The object ID and key identifying the object
+   * @return Whether or not the object is set to be collision active
    */
   bool getObjectIsCollidable(const int physObjectID) {
     assertIDValidity(physObjectID);
     return existingObjects_.at(physObjectID)->getCollidable();
-  };
+  }
 
   /**
    * @brief Set the stage to collidable or not.
+   *
+   * @param collidable Whether or not the object should be collision active
    */
-  bool setStageIsCollidable(bool collidable) {
-    return staticStageObject_->setCollidable(collidable);
-  };
+  void setStageIsCollidable(bool collidable) {
+    staticStageObject_->setCollidable(collidable);
+  }
 
   /**
    * @brief Get whether or not the stage is collision active.
+   *
+   * @return Whether or not the stage is set to be collision active
    */
-  bool getStageIsCollidable() { return staticStageObject_->getCollidable(); };
+  bool getStageIsCollidable() { return staticStageObject_->getCollidable(); }
 
   /** @brief Return the library implementation type for the simulator currently
    * in use. Use to check for a particular implementation.
@@ -875,7 +1123,7 @@ class PhysicsManager {
    */
   const PhysicsSimulationLibrary& getPhysicsSimulationLibrary() const {
     return activePhysSimLib_;
-  };
+  }
 
   /**
    * @brief Set the @ref esp::scene::SceneNode::semanticId_ for all visual nodes
@@ -890,6 +1138,7 @@ class PhysicsManager {
   /**
    * @brief Get a copy of the template used to initialize an object.
    *
+   * @param physObjectID Object ID to query
    * @return The initialization settings of the specified object instance.
    */
   metadata::attributes::ObjectAttributes::ptr getObjectInitAttributes(
@@ -939,7 +1188,22 @@ class PhysicsManager {
     return results;
   }
 
-  virtual int getNumActiveContactPoints() { return -1; }
+  /**
+   * @brief returns the wrapper manager for the currently created rigid objects.
+   * @return RigidObject wrapper manager.
+   */
+  std::shared_ptr<RigidObjectManager> getRigidObjectManager() {
+    return rigidObjectManager_;
+  }
+
+  /**
+   * @brief Check if @p physObjectID represents an existing object.
+   * @param physObjectID Object ID to check
+   * @return Whether object exists or not.
+   */
+  inline bool isValidObjectID(const int physObjectID) const {
+    return (existingObjects_.count(physObjectID) > 0);
+  }
 
  protected:
   /** @brief Check that a given object ID is valid (i.e. it refers to an
@@ -949,8 +1213,8 @@ class PhysicsManager {
    * @param physObjectID The object ID to validate.
    */
   virtual void assertIDValidity(const int physObjectID) const {
-    CHECK(existingObjects_.count(physObjectID) > 0);
-  };
+    CHECK(isValidObjectID(physObjectID));
+  }
 
   /** @brief Check if a particular mesh can be used as a collision mesh for a
    * particular physics implemenation. Always True for base @ref PhysicsManager
@@ -983,50 +1247,70 @@ class PhysicsManager {
   virtual bool initPhysicsFinalize();
 
   /**
-   * @brief Finalize scene initialization for kinematic scenes.  Overidden by
+   * @brief Finalize stage initialization for kinematic stage.  Overidden by
    * instancing class if physics is supported.
    *
-   * @param handle the handle to the attributes structure defining physical
-   * properties of the scene.
+   * @param initAttributes the attributes structure defining physical
+   * properties of the stage.
    * @return true if successful and false otherwise
    */
 
-  virtual bool addStageFinalize(const std::string& handle);
+  virtual bool addStageFinalize(
+      const metadata::attributes::StageAttributes::ptr& initAttributes);
 
   /** @brief Create and initialize a @ref RigidObject, assign it an ID and add
    * it to existingObjects_ map keyed with newObjectID
    * @param newObjectID valid object ID for the new object
-   * @param meshGroup The object's mesh.
-   * @param handle The handle to the physical object's template defining its
+   * @param initAttributes The physical object's template defining its
    * physical parameters.
    * @param objectNode Valid, existing scene node
    * @return whether the object has been successfully initialized and added to
    * existingObjects_ map
    */
-  virtual bool makeAndAddRigidObject(int newObjectID,
-                                     const std::string& handle,
-                                     scene::SceneNode* objectNode);
+  virtual bool makeAndAddRigidObject(
+      int newObjectID,
+      const esp::metadata::attributes::ObjectAttributes::ptr& objectAttributes,
+      scene::SceneNode* objectNode);
+
+  /** @brief Set the voxelization visualization for a scene node to be true or
+   * false.
+   * @param gridName The name of the grid to be drawn.
+   * @param rigidBase The rigidBase of the object or scene.
+   * @param drawables The drawables group with which to render the voxelization.
+   * @param drawVoxelization Set rendering of the voxelization to true or false.
+   */
+  void setVoxelizationDraw(const std::string& gridName,
+                           esp::physics::RigidBase* rigidBase,
+                           DrawableGroup* drawables,
+                           bool drawVoxelization);
 
   /** @brief A reference to a @ref esp::assets::ResourceManager which holds
    * assets that can be accessed by this @ref PhysicsManager*/
   assets::ResourceManager& resourceManager_;
 
+  /**@brief A pointer to this physics manager's owning simulator.
+   */
+  esp::sim::Simulator* simulator_ = nullptr;
+
   /** @brief A pointer to the @ref
    * esp::metadata::attributes::PhysicsManagerAttributes describing
-   * this physics manager */
+   * this physics manager
+   */
   const metadata::attributes::PhysicsManagerAttributes::cptr
       physicsManagerAttributes_;
 
   /** @brief The current physics library implementation used by this
    * @ref PhysicsManager. Can be used to correctly cast the @ref PhysicsManager
-   * to its derived type if necessary.*/
-  PhysicsSimulationLibrary activePhysSimLib_ = NONE;  // default
+   * to its derived type if necessary.
+   */
+  PhysicsSimulationLibrary activePhysSimLib_ =
+      PhysicsSimulationLibrary::NoPhysics;  // default
 
   /**
    * @brief The @ref scene::SceneNode which is the parent of all members of the
    * scene graph which exist in the physical world. Used to keep track of all
    * SceneNode's that have physical properties.
-   * */
+   */
   scene::SceneNode* physicsNode_ = nullptr;
 
   /**
@@ -1036,15 +1320,20 @@ class PhysicsManager {
    * MotionType::STATIC as it is loaded as static geometry with simulation
    * efficiency in mind. See
    * @ref addStage.
-   * */
-  physics::RigidStage::uptr staticStageObject_ = nullptr;
+   */
+  physics::RigidStage::ptr staticStageObject_ = nullptr;
 
   //! ==== Rigid object memory management ====
+
+  /** @brief This manager manages the wrapper objects used to provide safe,
+   * direct user access to all existing physics objects.
+   */
+  std::shared_ptr<RigidObjectManager> rigidObjectManager_;
 
   /** @brief Maps object IDs to all existing physical object instances in the
    * world.
    */
-  std::map<int, physics::RigidObject::uptr> existingObjects_;
+  std::map<int, physics::RigidObject::ptr> existingObjects_;
 
   /** @brief A counter of unique object ID's allocated thus far. Used to
    * allocate new IDs when  @ref recycledObjectIDs_ is empty without needing to
@@ -1072,6 +1361,7 @@ class PhysicsManager {
    * simulated with @ref stepPhysics up to this point. */
   double worldTime_ = 0.0;
 
+ public:
   ESP_SMART_POINTERS(PhysicsManager)
 };
 

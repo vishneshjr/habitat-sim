@@ -13,7 +13,7 @@
 namespace esp {
 // forward declaration
 namespace assets {
-class MeshData;
+struct MeshData;
 }
 
 namespace nav {
@@ -97,7 +97,7 @@ struct MultiGoalShortestPath {
 
   friend class PathFinder;
 
-  ESP_SMART_POINTERS_WITH_UNIQUE_PIMPL(MultiGoalShortestPath);
+  ESP_SMART_POINTERS_WITH_UNIQUE_PIMPL(MultiGoalShortestPath)
 };
 
 struct NavMeshSettings {
@@ -349,9 +349,9 @@ class PathFinder {
    *
    * @return The object containing triangulated NavMesh polys.
    */
-  const std::shared_ptr<assets::MeshData> getNavMeshData();
+  std::shared_ptr<assets::MeshData> getNavMeshData();
 
-  ESP_SMART_POINTERS_WITH_UNIQUE_PIMPL(PathFinder);
+  ESP_SMART_POINTERS_WITH_UNIQUE_PIMPL(PathFinder)
 };
 
 }  // namespace nav

@@ -45,15 +45,15 @@ cmake ../src \
     -DCMAKE_EXE_LINKER_FLAGS="${EXE_LINKER_FLAGS}" \
     -DBUILD_WITH_BULLET="$( if ${BULLET} ; then echo ON ; else echo OFF; fi )"
 
-cmake --build . -- -j 4 #TODO: Set to 4 cores only on CirelcCI
-cmake --build . --target install -- -j 4
+cmake --build . -- -j 8 #TODO: Set to 8 cores only on CirelcCI
+cmake --build . --target install -- -j 8
 
 echo "Done building."
 echo "Run:"
 echo "python2 -m SimpleHTTPServer 8000"
 echo "Or:"
 echo "python3 -m http.server"
-echo "Then open in browser:"
-echo "http://0.0.0.0:8000/build_js/utils/viewer/viewer.html?scene=skokloster-castle.glb"
-echo "Or:"
+echo "Then open in a browser:"
 echo "http://0.0.0.0:8000/build_js/esp/bindings_js/bindings.html?scene=skokloster-castle.glb"
+echo "Or open in a VR-capable browser:"
+echo "http://0.0.0.0:8000/build_js/esp/bindings_js/webvr.html?scene=skokloster-castle.glb"

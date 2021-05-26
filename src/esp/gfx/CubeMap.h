@@ -34,10 +34,13 @@ class CubeMap {
      * HDR depth texture
      */
     Depth,
-    // TODO: ObjectId
+    /**
+     * object id (uint) texture
+     */
+    ObjectId,
+
     // TODO: HDR color
 
-    // you will have to update it when new type is added
     Count,
   };
 
@@ -51,8 +54,9 @@ class CubeMap {
      */
     DepthTexture = 1 << 1,
     /**
-     * TODO: ObjectId
+     * create ObjectId cubemap
      */
+    ObjectIdTexture = 1 << 2,
     /**
      * Build mipmap for cubemap color texture
      * By default, NO mipmap will be built, only 1 level
@@ -158,7 +162,10 @@ class CubeMap {
    */
   void renderToTexture(CubeMapCamera& camera,
                        scene::SceneGraph& sceneGraph,
-                       RenderCamera::Flags flags);
+                       RenderCamera::Flags flags = {
+                           RenderCamera::Flag::FrustumCulling |
+                           RenderCamera::Flag::ClearColor |
+                           RenderCamera::Flag::ClearDepth});
 
  private:
   Flags flags_;
@@ -175,11 +182,11 @@ class CubeMap {
 
   // framebuffers (one for every cube side)
   Corrade::Containers::StaticArray<6, Magnum::GL::Framebuffer> frameBuffer_{
-      Corrade::Containers::DirectInit, Magnum::NoCreate};
+      Corrade::DirectInit, Magnum::NoCreate};
 
   // in case there is no need to output depth texture, we need a depth buffer
   Corrade::Containers::StaticArray<6, Magnum::GL::Renderbuffer>
-      optionalDepthBuffer_{Corrade::Containers::DirectInit, Magnum::NoCreate};
+      optionalDepthBuffer_{Corrade::DirectInit, Magnum::NoCreate};
 
   /**
    * @brief recreate the frame buffer
@@ -194,10 +201,15 @@ class CubeMap {
 
   /**
    * @brief Prepare to draw to the texture
-   * @param cubeSideIndex, the index of the cube side, can be 0,
+   * @param[in] cubeSideIndex, the index of the cube side, can be 0,
    * 1, 2, 3, 4, or 5
+   * @param[in] flags, the flags to control the rendering
    */
-  void prepareToDraw(unsigned int cubeSideIndex);
+  void prepareToDraw(unsigned int cubeSideIndex,
+                     RenderCamera::Flags flags = {
+                         RenderCamera::Flag::FrustumCulling |
+                         RenderCamera::Flag::ClearColor |
+                         RenderCamera::Flag::ClearDepth});
 
   /**
    * @brief Map shader output to attachments.
