@@ -77,7 +77,7 @@ class ManagedFileBasedContainer : public ManagedContainer<T, Access> {
       return nullptr;
     }
     // convert doc to const value
-    const io::JsonGenericValue config = docConfig.GetObject();
+    const auto config = docConfig.GetObject();
     ManagedFileIOPtr attr = this->buildManagedObjectFromDoc(filename, config);
     return this->postCreateRegister(attr, registerObject);
   }  // ManagedFileBasedContainer::createObjectFromJSONFile
@@ -98,6 +98,7 @@ class ManagedFileBasedContainer : public ManagedContainer<T, Access> {
         << "ManagedContainer::buildManagedObjectFromDoc (" << this->objectType_
         << ") : Failure loading attributes from document of unknown type : "
         << filename << ". Aborting.";
+    return nullptr;
   }
   /**
    * @brief Method to load a Managed Object's data from a file.  This is the
