@@ -502,6 +502,7 @@ jobs:
               CORRADE_TEST_COLOR=ON GTEST_COLOR=yes ./build.sh --headless \
                 --bullet \
                 --vhacd \
+                --debug \
                 --with-cuda \
                 --build-datatool \
                 --run-tests \
