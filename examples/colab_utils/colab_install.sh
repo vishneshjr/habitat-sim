@@ -37,7 +37,7 @@ conda install -S -y --prefix /usr/local -c "${CHANNEL}" -c conda-forge "${PACKAG
 
 #Shallow GIT clone for speed
 git clone https://github.com/facebookresearch/habitat-lab --depth 1
-git clone -b articulated-objects-prototype https://github.com/facebookresearch/habitat-sim
+git clone -b ao-no-async https://github.com/facebookresearch/habitat-sim
 
 #Install Requirements.
 cd /content/habitat-lab/

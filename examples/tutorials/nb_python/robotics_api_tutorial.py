@@ -214,7 +214,7 @@ def remake_simulator(sim_settings):
     if sim != None:
         # close the simulator to clear allocated asset memory
         # Note: force destruction of the background rendering thread
-        sim.close(destroy=True)
+        sim.close()
     # initialize the simulator
     sim = habitat_sim.Simulator(cfg)
     # Managers of various Attributes templates
