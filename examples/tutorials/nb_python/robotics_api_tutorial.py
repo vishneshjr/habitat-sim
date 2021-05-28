@@ -232,7 +232,7 @@ def remake_simulator(sim_settings):
 
 urdf_files = {
     "aliengo": os.path.join(data_path, "URDF_demo_assets/aliengo/urdf/aliengo.urdf"),
-    "iiwa": os.path.join(data_path, "test_assets/URDF/kuka_iiwa/model_free_base.urdf"),
+    "iiwa": os.path.join(data_path, "test_assets/urdf/kuka_iiwa/model_free_base.urdf"),
     "locobot": os.path.join(data_path, "URDF_demo_assets/aliengo/urdf/aliengo.urdf"),
     "locobot_light": os.path.join(
         data_path, "URDF_demo_assets/aliengo/urdf/aliengo.urdf"
