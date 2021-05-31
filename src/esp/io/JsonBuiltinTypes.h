@@ -22,7 +22,7 @@ namespace esp {
 namespace io {
 
 // Make these types easier to read/type. We'll use them everywhere.
-typedef rapidjson::GenericValue<rapidjson::UTF8<> > JsonGenericValue;
+typedef rapidjson::Value JsonGenericValue;
 typedef rapidjson::MemoryPoolAllocator<> JsonAllocator;
 
 // template addMember/readMember to match any type. These are declared here,
