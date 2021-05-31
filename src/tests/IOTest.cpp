@@ -136,7 +136,7 @@ TEST(IOTest, JsonTest) {
   // io::JsonGenericValue :
   esp::io::JsonDocument tmpJSON = esp::io::parseJsonString(attr_str);
   // io::JsonGenericValue :
-  const esp::io::JsonGenericValue jsonDoc = tmpJSON.GetObject();
+  const auto jsonDoc = tmpJSON.GetObject();
 
   ObjectAttributes::ptr attributes = ObjectAttributes::create("temp");
 
