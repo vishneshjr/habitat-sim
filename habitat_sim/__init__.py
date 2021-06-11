@@ -31,7 +31,7 @@ if not getattr(builtins, "__HSIM_SETUP__", False):
 
     try:
         from habitat_sim._ext.habitat_sim_bindings import VHACDParameters  # noqa: F401
-    except Exception:
+    except ImportError:
         pass
 
     # if getattr()
