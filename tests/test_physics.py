@@ -936,3 +936,40 @@ def test_articulated_object_dynamics(test_asset):
         sim.step_physics(0.5)
         assert robot.awake
         assert robot2.awake
+
+
+@pytest.mark.skipif(
+    not habitat_sim.built_with_bullet,
+    reason="ArticulatedObject API requires Bullet physics.",
+)
+def test_articulated_object_damping_joint_motors():
+    # test automated creation of joint motors from URDF configured joint damping values
+    robot_file = "data/test_assets/urdf/kuka_iiwa/model_free_base.urdf"
+    cfg_settings = examples.settings.default_sim_settings.copy()
+    cfg_settings["scene"] = "NONE"
+    cfg_settings["enable_physics"] = True
+    hab_cfg = examples.settings.make_cfg(cfg_settings)
+    with habitat_sim.Simulator(hab_cfg) as sim:
+        art_obj_mgr = sim.get_articulated_object_manager()
+        # parse URDF and add an ArticulatedObject to the world
+        robot = art_obj_mgr.add_articulated_object_from_urdf(filepath=robot_file)
+        assert robot.is_alive
+        # When URDF joint damping is defined, we generate a set of motors automatically
+        # get a map of joint motor ids to starting DoF indices
+        existing_joint_motors = robot.get_existing_joint_motor_ids()
+        assert len(existing_joint_motors) == 7
+        for id_to_dof in existing_joint_motors.items():
+            # for this model, should be single dof motors for all dofs
+            assert id_to_dof[0] == id_to_dof[1]
+            motor_settings = robot.get_joint_motor_settings(id_to_dof[0])
+            # note max impulse is taken directly from the configured damping value
+            assert motor_settings.max_impulse == 0.5
+            assert (
+                motor_settings.motor_type
+                == habitat_sim.physics.JointMotorType.SingleDof
+            )
+            # should not be controlling position
+            assert motor_settings.position_gain == 0
+            # should be attempting to maintain 0 velocity
+            assert motor_settings.velocity_gain == 1.0
+            assert motor_settings.velocity_target == 0.0

@@ -334,8 +334,8 @@ void declareArticulatedObjectWrapper(py::module& m,
                                                         classStrPrefix.c_str())
       .def("get_existing_joint_motor_ids",
            &ManagedArticulatedObject::getExistingJointMotors,
-           ("Get a dictionary holding all of this " + objType +
-            "'s joint motor ids.")
+           ("Get a dictionary mapping all of this " + objType +
+            "'s joint motor ids to their respective start DoFs.")
                .c_str())
       .def("create_all_motors",
            &ManagedArticulatedObject::createMotorsForAllDofs,
