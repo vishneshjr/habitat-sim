@@ -973,3 +973,74 @@ def test_articulated_object_damping_joint_motors():
             # should be attempting to maintain 0 velocity
             assert motor_settings.velocity_gain == 1.0
             assert motor_settings.velocity_target == 0.0
+
+
+@pytest.mark.skipif(
+    not osp.exists("data/scene_datasets/habitat-test-scenes/apartment_1.glb"),
+    reason="Requires the habitat-test-scenes",
+)
+@pytest.mark.skipif(
+    not habitat_sim.built_with_bullet,
+    reason="ArticulatedObject API requires Bullet physics.",
+)
+@pytest.mark.parametrize(
+    "test_asset",
+    [
+        "data/test_assets/urdf/kuka_iiwa/model_free_base.urdf",
+        "data/test_assets/urdf/fridge/fridge.urdf",
+        "data/test_assets/urdf/prim_chain.urdf",
+        "data/test_assets/urdf/amass_male.urdf",
+    ],
+)
+def test_articulated_object_joint_motors(test_asset):
+    cfg_settings = examples.settings.default_sim_settings.copy()
+    cfg_settings["scene"] = "data/scene_datasets/habitat-test-scenes/apartment_1.glb"
+    cfg_settings["enable_physics"] = True
+
+    # loading the physical scene
+    hab_cfg = examples.settings.make_cfg(cfg_settings)
+
+    with habitat_sim.Simulator(hab_cfg) as sim:
+        art_obj_mgr = sim.get_articulated_object_manager()
+        robot_file = test_asset
+
+        # parse URDF and add an ArticulatedObject to the world
+        robot = art_obj_mgr.add_articulated_object_from_urdf(filepath=robot_file)
+        assert robot.is_alive
+
+        # remove any automatically created motors
+        existing_motor_ids = robot.get_existing_joint_motor_ids()
+        for motor_id in existing_motor_ids:
+            robot.remove_joint_motor(motor_id)
+        assert len(robot.get_existing_joint_motor_ids()) == 0
+
+        # iterate through links and setup/test joint motors
+        for link_id in robot.get_link_ids():
+            if (
+                robot.get_link_joint_type(link_id)
+                == habitat_sim.physics.JointType.Spherical
+            ):
+                # test spherical joint motors
+                joint_motor_settings = habitat_sim.physics.JointMotorSettings()
+                joint_motor_settings.motor_type = (
+                    habitat_sim.physics.JointMotorType.Spherical
+                )
+                # TODO: setup
+                # TODO: refactor this to start dof or link?
+                robot.create_joint_motor(link_id, joint_motor_settings)
+            elif (
+                robot.get_link_joint_type(link_id)
+                == habitat_sim.physics.JointType.Prismatic
+                or robot.get_link_joint_type(link_id)
+                == habitat_sim.physics.JointType.Revolute
+            ):
+                # test single dof joint motors
+                joint_motor_settings = habitat_sim.physics.JointMotorSettings()
+                # TODO: setup
+                robot.create_joint_motor(
+                    robot.get_link_dof_offset(link_id), joint_motor_settings
+                )
+            else:
+                # planar or fixed joints are not supported
+                continue
+            # TODO: normalize the API and move the creation here?
