@@ -9,9 +9,9 @@ sys.setdlopenflags(flags | ctypes.RTLD_GLOBAL)
 
 from magnum import Vector2i, Vector3, gl
 from magnum.platform.glfw import Application
-from settings import default_sim_settings, make_cfg
 
 import habitat_sim
+from examples.settings import default_sim_settings, make_cfg
 
 
 class HabitatSimInteractiveViewer(Application):
@@ -19,7 +19,7 @@ class HabitatSimInteractiveViewer(Application):
         configuration = self.Configuration()
         configuration.title = "Habitat Sim Interactive Viewer"
         Application.__init__(self, configuration)
-        self.sim_settings: Dict[str:Any] = sim_settings
+        self.sim_settings: Dict[str, Any] = sim_settings
 
         # set proper viewport size
         self.viewport_size: Vector2i = gl.default_framebuffer.viewport.size()
@@ -222,6 +222,37 @@ class HabitatSimInteractiveViewer(Application):
             self.exit_event(Application.ExitEvent)
             return
 
+        if key == pressed.TAB:
+            print("------- Swapping scenes --------")
+            # get list of all scenes and rotate to the next one
+            scene_ids = self.sim.metadata_mediator.get_scene_handles()
+            cur_scene_index = 0
+            if self.sim_settings["scene"] not in scene_ids:
+                # check substrings
+                found_match = False
+                for scene_ix, scene_id in enumerate(scene_ids):
+                    if self.sim_settings["scene"] in scene_id:
+                        cur_scene_index = scene_ix
+                        found_match = True
+                        break
+                if not found_match:
+                    print(
+                        f"    The current scene, '{self.sim_settings['scene']}', is not in the list, starting at 0."
+                    )
+                else:
+                    print(
+                        f"    Found a match for the current scene, '{self.sim_settings['scene']}', with handle '{scene_ids[cur_scene_index]}'"
+                    )
+            else:
+                cur_scene_index = scene_ids.index(self.sim_settings["scene"])
+            next_scene_index = (cur_scene_index + 1) % len(scene_ids)
+            self.sim_settings["scene"] = scene_ids[next_scene_index]
+            self.reconfigure_sim()
+            print(
+                f"    Initialized scene ({next_scene_index}/{len(scene_ids)}) = '{self.sim_settings['scene']}'"
+            )
+            print("-------                 --------")
+
         elif key == pressed.H:
             self.print_help_text()
 
@@ -413,4 +444,4 @@ if __name__ == "__main__":
     sim_settings["scene_dataset_config_file"] = args.dataset
     sim_settings["enable_physics"] = not args.disable_physics
 
-HabitatSimInteractiveViewer(sim_settings).exec()
+    HabitatSimInteractiveViewer(sim_settings).exec()
