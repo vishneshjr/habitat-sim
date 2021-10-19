@@ -207,7 +207,8 @@ void initGfxBindings(py::module& m) {
       .def(py::self != py::self);
 
   py::class_<DebugLineRender, std::shared_ptr<DebugLineRender>>(
-      m, "DebugLineRender")
+      m, "DebugLineRender",
+      R"(Singleton utility class for on-the-fly rendering of lines (e.g. every frame). This is intended for debugging or simple UX for prototype apps. The API prioritizes ease-of-use over maximum runtime performance.)")
       .def(
           "set_line_width", &DebugLineRender::setLineWidth,
           R"(Set global line width for all lines rendered by DebugLineRender.)")
