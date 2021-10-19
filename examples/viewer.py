@@ -74,6 +74,11 @@ class HabitatSimInteractiveViewer(Application):
         self.time_since_last_simulation = 0.0
         self.print_help_text()
 
+    def debug_draw(self) -> None:
+        """
+        Function called during "draw_event". Overwrite with custom debug draw calls.
+        """
+
     def draw_event(self) -> None:
         """
         Calls continuously to re-render frames and swap the two frame buffers
@@ -103,6 +108,9 @@ class HabitatSimInteractiveViewer(Application):
             self.time_since_last_simulation = math.fmod(
                 self.time_since_last_simulation, 1.0 / 60.0
             )
+
+        # custom debug calls
+        self.debug_draw()
 
         self.sim._sensors["color_sensor"].draw_observation()
         self.render_camera.render_target.blit_rgba_to_default()
@@ -223,6 +231,10 @@ class HabitatSimInteractiveViewer(Application):
             return
 
         if key == pressed.TAB:
+            delta = 1
+            if event.modifiers & Application.InputEvent.Modifier.SHIFT:
+                # move backwards through scenes
+                delta = -1
             print("------- Swapping scenes --------")
             # get list of all scenes and rotate to the next one
             scene_ids = self.sim.metadata_mediator.get_scene_handles()
@@ -245,7 +257,9 @@ class HabitatSimInteractiveViewer(Application):
                     )
             else:
                 cur_scene_index = scene_ids.index(self.sim_settings["scene"])
-            next_scene_index = (cur_scene_index + 1) % len(scene_ids)
+            next_scene_index = (cur_scene_index + delta) % len(scene_ids)
+            if next_scene_index < 0:
+                next_scene_index = len(scene_ids) - 1
             self.sim_settings["scene"] = scene_ids[next_scene_index]
             self.reconfigure_sim()
             print(

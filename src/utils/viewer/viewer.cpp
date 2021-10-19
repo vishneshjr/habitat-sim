@@ -1317,6 +1317,20 @@ void Viewer::drawEvent() {
         Mn::Matrix4 projM(renderCamera_->projectionMatrix());
 
         simulator_->physicsDebugDraw(projM * camM);
+
+        auto dblr = simulator_->getDebugLineRender();
+
+        // render contact points with debug line render
+        auto cps = simulator_->getPhysicsContactPoints();
+        for (auto cp : cps) {
+          if (cp.isActive) {
+            // draw a contact point
+            Mn::Color4 red(1.0, 0.0, 0.0, 1.0);
+            dblr->drawLine(cp.positionOnBInWS,
+                           cp.positionOnBInWS + cp.contactNormalOnBInWS, red);
+            dblr->drawCircle(cp.positionOnBInWS, 0.02, red);
+          }
+        }
       }
       Mn::GL::Renderer::setDepthFunction(Mn::GL::Renderer::DepthFunction::Less);
       Mn::GL::Renderer::setPolygonOffset(0.0f, 0.0f);
@@ -1929,10 +1943,21 @@ void Viewer::keyPressEvent(KeyEvent& event) {
       showAgentStateMsg(true, true);
       break;
     case KeyEvent::Key::T: {
+      if (event.modifiers() &
+          Magnum::Platform::GlfwApplication::KeyEvent::Modifier::Shift) {
+        ESP_DEBUG() << "Shift pressed, removing all AOs.";
+        auto aom = simulator_->getArticulatedObjectManager();
+        aom->removeAllObjects();
+        break;
+      }
       // add an ArticulatedObject from provided filepath
       ESP_DEBUG() << "Load URDF: provide a URDF filepath.";
-      std::string urdfFilepath;
-      std::cin >> urdfFilepath;
+      std::string urdfFilepath =
+          "/Users/alexclegg/Documents/dev/habitat-lab/data/versioned_data/"
+          "replica_cad_dataset_1.1/urdf/chest_of_drawers/"
+          "chestOfDrawers_01_actual.urdf";
+      // std::string urdfFilepath;
+      // std::cin >> urdfFilepath;
 
       if (urdfFilepath.empty()) {
         ESP_DEBUG() << "... no input provided. Aborting.";
@@ -1942,7 +1967,7 @@ void Viewer::keyPressEvent(KeyEvent& event) {
       } else if (Cr::Utility::Directory::exists(urdfFilepath)) {
         auto aom = simulator_->getArticulatedObjectManager();
         auto ao =
-            aom->addArticulatedObjectFromURDF(urdfFilepath, false, 1, 1, true);
+            aom->addArticulatedObjectFromURDF(urdfFilepath, true, 1, 1, true);
         ao->setTranslation(
             defaultAgent_->node().transformation().transformPoint(
                 {0, 1.0, -1.5}));

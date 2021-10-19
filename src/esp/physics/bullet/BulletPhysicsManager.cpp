@@ -492,6 +492,9 @@ Magnum::Range3D BulletPhysicsManager::getStageCollisionShapeAabb() const {
 void BulletPhysicsManager::debugDraw(const Magnum::Matrix4& projTrans) const {
   if (debugDrawer_) {
     debugDrawer_->setTransformationProjectionMatrix(projTrans);
+    bWorld_->getDebugDrawer()->setDebugMode(
+        bWorld_->getDebugDrawer()->getDebugMode() |
+        bWorld_->getDebugDrawer()->DBG_DrawContactPoints);
     bWorld_->debugDrawWorld();
   }
 }
