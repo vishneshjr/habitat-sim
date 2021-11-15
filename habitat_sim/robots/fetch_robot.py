@@ -31,12 +31,12 @@ class FetchRobot(MobileManipulator):
                     cam_offset_pos=mn.Vector3(0.17, 1.2, 0.0),
                     cam_look_at_pos=mn.Vector3(0.75, 1.0, 0.0),
                     attached_link_id=-1,
-                ),
-                "robot_third": RobotCameraParams(
-                    cam_offset_pos=mn.Vector3(-0.5, 1.7, -0.5),
-                    cam_look_at_pos=mn.Vector3(1, 0.0, 0.75),
-                    attached_link_id=-1,
-                ),
+                )#,
+                # "robot_third": RobotCameraParams(
+                #     cam_offset_pos=mn.Vector3(-0.5, 1.7, -0.5),
+                #     cam_look_at_pos=mn.Vector3(1, 0.0, 0.75),
+                #     attached_link_id=-1,
+                # ),
             },
             gripper_closed_state=[0.0, 0.0],
             gripper_open_state=[0.04, 0.04],
@@ -72,8 +72,18 @@ class FetchRobot(MobileManipulator):
     def reconfigure(self) -> None:
         super().reconfigure()
 
+        # Fix the head.
+        self._set_joint_pos(self.head_rot_jid, 0)
+        self._set_motor_pos(self.head_rot_jid, 0)
+        self._set_joint_pos(self.head_tilt_jid, np.pi / 2)
+        self._set_motor_pos(self.head_tilt_jid, np.pi / 2)
+        # Fix the back
+        fix_back_val = 0.15
+        self._set_joint_pos(self.back_joint_id, fix_back_val)
+        self._set_motor_pos(self.back_joint_id, fix_back_val)
+
         # NOTE: this is necessary to set locked head and back positions
-        self.update()
+        #self.update()
 
     def reset(self) -> None:
         super().reset()
@@ -89,14 +99,14 @@ class FetchRobot(MobileManipulator):
     def update(self):
         super().update()
         # Fix the head.
-        self._set_joint_pos(self.head_rot_jid, 0)
-        self._set_motor_pos(self.head_rot_jid, 0)
-        self._set_joint_pos(self.head_tilt_jid, np.pi / 2)
-        self._set_motor_pos(self.head_tilt_jid, np.pi / 2)
+        #self._set_joint_pos(self.head_rot_jid, 0)
+        #self._set_motor_pos(self.head_rot_jid, 0)
+        #self._set_joint_pos(self.head_tilt_jid, np.pi / 2)
+        #self._set_motor_pos(self.head_tilt_jid, np.pi / 2)
         # Fix the back
-        fix_back_val = 0.15
-        self._set_joint_pos(self.back_joint_id, fix_back_val)
-        self._set_motor_pos(self.back_joint_id, fix_back_val)
+        #fix_back_val = 0.15
+        #self._set_joint_pos(self.back_joint_id, fix_back_val)
+        #self._set_motor_pos(self.back_joint_id, fix_back_val)
 
 
 class FetchRobotNoWheels(FetchRobot):

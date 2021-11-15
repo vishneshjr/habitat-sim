@@ -156,6 +156,8 @@ class MobileManipulator(RobotInterface):
         self.sim_obj = ao_mgr.add_articulated_object_from_urdf(
             self.urdf_path, fixed_base=self._fixed_base
         )
+        if self._limit_robo_joints:
+            self.sim_obj.auto_clamp_joint_limits = True
         for link_id in self.sim_obj.get_link_ids():
             self.joint_pos_indices[link_id] = self.sim_obj.get_link_joint_pos_offset(
                 link_id
@@ -229,8 +231,8 @@ class MobileManipulator(RobotInterface):
 
         # Guard against out of limit joints
         # TODO: should auto clamping be enabled instead? How often should we clamp?
-        if self._limit_robo_joints:
-            self.sim_obj.clamp_joint_limits()
+        #if self._limit_robo_joints:
+        #    self.sim_obj.clamp_joint_limits()
 
         self.sim_obj.awake = True
 
