@@ -4,6 +4,7 @@
 
 import ctypes
 import math
+import random
 import sys
 import time
 from typing import Any, Callable, Dict, Optional
@@ -95,47 +96,40 @@ class FairmotionSimInteractiveViewer(HabitatSimInteractiveViewer):
         if self.path is not None:
 
             # hardcoding the timestep
-            self.path_time += 1.0 / 60.0
+            # self.path_time += 1.0 / 60.0
+            # self.path_time = 2.5
 
-            path_length = 0
-            forward = None
-            char_pos = None
-            for pix, point in enumerate(self.path.points):
-                if pix > 0:
-                    forward = mn.Vector3(point - self.path.points[pix - 1])
-                    prev_path_length = path_length
-                    path_length += forward.length()
-                    if self.path_time < path_length:
-                        segment_distance = self.path_time - prev_path_length
-                        char_pos = (
-                            self.path.points[pix - 1]
-                            + forward.normalized() * segment_distance
-                        )
-                        break
-            if self.path_time > path_length:
-                self.path_time = 0
-                char_pos = self.path.points[0]
-            look_at_T = mn.Matrix4.look_at(
-                char_pos, char_pos + forward.normalized(), mn.Vector3(0.0, 1.0, 0.0)
-            )
-            coordinate_transform = mn.Matrix4.rotation(
-                mn.Rad(mn.math.pi), mn.Vector3(0.0, 1.0, 0.0)
-            )
-            final_transform = look_at_T.__matmul__(coordinate_transform)
             # compute current frame from self.path_time w/ wrapping
             motion_time_length = (
                 fairmotion_interface.Move.walk_to_walk.num_of_frames * (1.0 / 120.0)
             )
             mocap_time = math.fmod(self.path_time, motion_time_length)
             mocap_frame = int(mocap_time * 120)
+            # mocap_cycles_past = math.floor(self.path_time / motion_time_length)
+            # NOTE: total distance covered by mocap cycle = map_of_total_displacement[-1]
+            # distance_on_path = map_of_total_displacement[-1] * mocap_cycles_past + map_of_total_displacement[mocap_frame]
+            # TODO: use sum of root displacements between frames instead of displacement for our map
 
-            # print(f"motion_time_length = {motion_time_length}")
-            # print(f"self.path_time = {self.path_time}")
-            # print(f"mocap_frame = {mocap_frame}")
-
-            # TODO: apply mocap root drift
-
-            # TODO: apply mocap orientation
+            forward = None
+            char_pos = None
+            needs_wrap = True
+            while needs_wrap:
+                path_length = 0
+                for pix, point in enumerate(self.path.points):
+                    if pix > 0:
+                        forward = mn.Vector3(point - self.path.points[pix - 1])
+                        prev_path_length = path_length
+                        path_length += forward.length()
+                        if self.path_time < path_length:
+                            segment_distance = self.path_time - prev_path_length
+                            char_pos = (
+                                self.path.points[pix - 1]
+                                + forward.normalized() * segment_distance
+                            )
+                            needs_wrap = False
+                            break
+                if self.path_time > path_length:
+                    self.path_time = math.fmod(self.path_time, path_length)
 
             # apply joint angles
             (
@@ -146,6 +140,58 @@ class FairmotionSimInteractiveViewer(HabitatSimInteractiveViewer):
                 self.fm_demo.motion.poses[mocap_frame], self.fm_demo.model2, raw=False
             )
             self.fm_demo.model2.joint_positions = new_pose
+
+            look_at_T = mn.Matrix4.look_at(
+                char_pos, char_pos + forward.normalized(), mn.Vector3(0.0, 1.0, 0.0)
+            )
+
+            # TODO: apply mocap orientation
+            final_transform = look_at_T.__matmul__(
+                mn.Matrix4.from_(new_root_rotation.to_matrix(), mn.Vector3())
+            )
+
+            # coordinate_transform = mn.Matrix4.rotation(
+            #     mn.Rad(mn.math.pi), mn.Vector3(0.0, 1.0, 0.0)
+            # )
+            # final_transform = look_at_T.__matmul__(coordinate_transform)
+
+            # print(f"motion_time_length = {motion_time_length}")
+            # print(f"self.path_time = {self.path_time}")
+            # print(f"mocap_frame = {mocap_frame}")
+
+            # apply mocap root drift
+            local_drift = fairmotion_interface.Move.walk_to_walk.translation_drifts[
+                mocap_frame
+            ]
+            global_drift = final_transform.transform_vector(local_drift)
+            final_transform.translation += global_drift
+            # print(f"local_drift = {local_drift}")
+            # print(f"global_drift = {global_drift}")
+
+            # move the character up
+            root_y_offset = mn.Vector3(0.0, 0.85, 0.0)
+            final_transform.translation += root_y_offset
+
+            # DEBUG: draw the mocap frame transformed into global space on the character
+            mocap_forward = self.fm_demo.motion.skel.v_face
+            mocap_up = self.fm_demo.motion.skel.v_up
+            global_mocap_forward = final_transform.transform_vector(mocap_forward)
+            global_mocap_u = final_transform.transform_vector(mocap_up)
+            green = mn.Color4(0.0, 1.0, 0.0, 1.0)
+            blue = mn.Color4(0.0, 0.0, 1.0, 1.0)
+
+            # y axis
+            self.sim.get_debug_line_render().draw_transformed_line(
+                final_transform.translation,
+                final_transform.translation + global_mocap_u,
+                green,
+            )
+            # z axis
+            self.sim.get_debug_line_render().draw_transformed_line(
+                final_transform.translation,
+                final_transform.translation + global_mocap_forward,
+                blue,
+            )
 
             self.fm_demo.model2.transformation = final_transform
 
@@ -211,7 +257,13 @@ class FairmotionSimInteractiveViewer(HabitatSimInteractiveViewer):
                 self.fm_demo.load_model()
 
         elif key == pressed.J:
-            if not self.sim.pathfinder.is_loaded:
+            if event.modifiers == mod.SHIFT:
+                self.path_time += 0.1
+            elif event.modifiers == mod.CTRL:
+                self.path_time -= 0.1
+            elif event.modifiers == mod.ALT:
+                self.path_time = random.uniform(0.0, 10.0)
+            elif not self.sim.pathfinder.is_loaded:
                 logger.warn("Warning: pathfinder not initialized, recompute navmesh")
             else:
                 logger.info("Command: shortest path between two random points")
