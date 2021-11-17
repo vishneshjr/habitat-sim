@@ -52,7 +52,9 @@ class FairmotionInterface:
         self.user_metadata = {}
         self.last_metadata_file: Optional[str] = None
         self.motion_stepper = 1
-        self.rotation_offset: Optional[mn.Quaternion] = None
+        self.rotation_offset: Optional[
+            mn.Quaternion
+        ] = None  # NOTE: mn.Quaternion() == [w,x,y,z] == [1.0, 0, 0, 0] == Identity
         self.translation_offset: Optional[mn.Vector3] = None
         self.is_reversed = False
         self.activity: Activity = Activity.NONE
@@ -343,6 +345,12 @@ class FairmotionInterface:
         else:
             root_T = pose.get_transform(ROOT, local=False)
 
+        # NOTE: example psuedo code...
+        # final_rotation_correction = mn.Quaternion
+
+        # if not raw:
+        #     final_rotation_correction = self.automated_correction * self.rotation_offset
+
         # adding offsets to root transformation
         # rotation
         if raw:
@@ -597,7 +605,7 @@ class FairmotionInterface:
         self.model.translation = path.points[0] + mn.Vector3(0.0, 1.0, 0.0)
 
         # First update with step_size 0 to start character
-        self.update_pathfollower(step_size=0)
+        # self.update_pathfollower(step_size=0)
 
     def update_pathfollower(self, step_size: int = 1):
         """
@@ -700,7 +708,11 @@ class Move:
             self.poses = motion.poses
             self.num_of_frames: int = len(motion.poses)
             self.translation_drifts: List[mn.Vector3] = []
+
+            # TODO: convert to scalar displacement because we already know what forward is
+            # TODO: convert to cumulative displacement instead of delta displacement entry[t] = sum(entry[0...t-1]) + ||project(root[t]-root[t-1], forward)||
             self.forward_displacements: List[mn.Vector3] = []
+
             self.root_orientations: List[mn.Quaternion] = []
 
             # this section will produce a unit vector from roots of the first and last frame

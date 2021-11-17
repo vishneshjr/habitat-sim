@@ -107,7 +107,7 @@ class FairmotionSimInteractiveViewer(HabitatSimInteractiveViewer):
             mocap_frame = int(mocap_time * 120)
             # mocap_cycles_past = math.floor(self.path_time / motion_time_length)
             # NOTE: total distance covered by mocap cycle = map_of_total_displacement[-1]
-            # distance_on_path = map_of_total_displacement[-1] * mocap_cycles_past + map_of_total_displacement[mocap_frame]
+            # delta_distance_on_path = map_of_total_displacement[mocap_frame] - map_of_total_displacement[previous_mocap_frame]
             # TODO: use sum of root displacements between frames instead of displacement for our map
 
             forward = None
@@ -228,10 +228,11 @@ class FairmotionSimInteractiveViewer(HabitatSimInteractiveViewer):
         """
 
         def play_motion() -> None:
-            if self.fm_demo.motion is not None:
-                self.fm_demo.next_pose()
-                self.fm_demo.next_pose()
-                self.fm_demo.update_pathfollower(step_size=2)
+            # if self.fm_demo.motion is not None:
+            # self.fm_demo.next_pose()
+            # self.fm_demo.next_pose()
+            # self.fm_demo.update_pathfollower(step_size=2)
+            self.path_time += 1.0 / 60.0
             self.debug_path_follower()
 
         super().draw_event(simulation_call=play_motion)
@@ -259,10 +260,13 @@ class FairmotionSimInteractiveViewer(HabitatSimInteractiveViewer):
         elif key == pressed.J:
             if event.modifiers == mod.SHIFT:
                 self.path_time += 0.1
+                self.debug_path_follower()
             elif event.modifiers == mod.CTRL:
                 self.path_time -= 0.1
+                self.debug_path_follower()
             elif event.modifiers == mod.ALT:
                 self.path_time = random.uniform(0.0, 10.0)
+                self.debug_path_follower()
             elif not self.sim.pathfinder.is_loaded:
                 logger.warn("Warning: pathfinder not initialized, recompute navmesh")
             else:
@@ -500,33 +504,43 @@ class FairmotionSimInteractiveViewer(HabitatSimInteractiveViewer):
             )
         self.path_traj_obj_id = -1
 
-        while any([sample1 is None, sample2 is None]):
-            sample1 = sample1 or self.sim.pathfinder.get_random_navigable_point()
-            sample2 = sample2 or self.sim.pathfinder.get_random_navigable_point()
+        found_path = False
+        while not found_path:
+            sample1 = None
+            sample2 = None
+            while any([sample1 is None, sample2 is None]):
+                sample1 = sample1 or self.sim.pathfinder.get_random_navigable_point()
+                sample2 = sample2 or self.sim.pathfinder.get_random_navigable_point()
 
-            # constraint points to be on first floor
-            if sample1[1] != sample2[1] or sample1[1] > 2:
-                logger.warn(
-                    "Warning: points are out of acceptable area, replacing with randoms"
-                )
-                sample1, sample2 = None, None
-        print(sample1, sample2)
+                # constraint points to be on first floor
+                if sample1[1] != sample2[1] or sample1[1] > 2:
+                    logger.warn(
+                        "Warning: points are out of acceptable area, replacing with randoms"
+                    )
+                    sample1, sample2 = None, None
+            print(sample1, sample2)
 
-        path = habitat_sim.ShortestPath()
-        path.requested_start = sample1
-        path.requested_end = sample2
-        found_path = self.sim.pathfinder.find_path(path)
-        geodesic_distance = path.geodesic_distance
-        self.path_points = path.points
-        self.fm_demo.setup_pathfollower(path)
+            path = habitat_sim.ShortestPath()
+            path.requested_start = sample1
+            path.requested_end = sample2
+            found_path = self.sim.pathfinder.find_path(path)
+            geodesic_distance = path.geodesic_distance
+            self.path_points = path.points
 
-        logger.info(
+        print(
             f"""
             found_path :            {str(found_path)}
             geodesic_distance :     {str(geodesic_distance)}
             path_points :           {str(self.path_points)}
             """
         )
+
+        # TODO:
+        # add the spline subdivision
+        # path.points = habitat_sim.geo.build_catmull_rom_spline(path.points, 10, 0.5)
+        # self.path_points = path.points
+
+        self.fm_demo.setup_pathfollower(path)
 
         colors = [mn.Color3.yellow(), mn.Color3.red()]
 
