@@ -3,9 +3,12 @@
 # LICENSE file in the root directory of this source tree.
 
 import ctypes
+import math
 import sys
 import time
 from typing import Any, Callable, Dict, Optional
+
+from examples import fairmotion_interface
 
 flags = sys.getdlopenflags()
 sys.setdlopenflags(flags | ctypes.RTLD_GLOBAL)
@@ -65,7 +68,111 @@ class FairmotionSimInteractiveViewer(HabitatSimInteractiveViewer):
         # shortest path attributes
         self.path_traj_obj_id = -1
 
+        self.path = None
+        self.path_time = 0
+
         self.navmesh_config_and_recompute()
+
+    def draw_frame(self):
+        red = mn.Color4(1.0, 0.0, 0.0, 1.0)
+        green = mn.Color4(0.0, 1.0, 0.0, 1.0)
+        blue = mn.Color4(0.0, 0.0, 1.0, 1.0)
+
+        # x axis
+        self.sim.get_debug_line_render().draw_transformed_line(
+            mn.Vector3(), mn.Vector3(1.0, 0.0, 0.0), red
+        )
+        # y axis
+        self.sim.get_debug_line_render().draw_transformed_line(
+            mn.Vector3(), mn.Vector3(0.0, 1.0, 0.0), green
+        )
+        # z axis
+        self.sim.get_debug_line_render().draw_transformed_line(
+            mn.Vector3(), mn.Vector3(0.0, 0.0, 1.0), blue
+        )
+
+    def debug_path_follower(self):
+        if self.path is not None:
+
+            # hardcoding the timestep
+            self.path_time += 1.0 / 60.0
+
+            path_length = 0
+            forward = None
+            char_pos = None
+            for pix, point in enumerate(self.path.points):
+                if pix > 0:
+                    forward = mn.Vector3(point - self.path.points[pix - 1])
+                    prev_path_length = path_length
+                    path_length += forward.length()
+                    if self.path_time < path_length:
+                        segment_distance = self.path_time - prev_path_length
+                        char_pos = (
+                            self.path.points[pix - 1]
+                            + forward.normalized() * segment_distance
+                        )
+                        break
+            if self.path_time > path_length:
+                self.path_time = 0
+                char_pos = self.path.points[0]
+            look_at_T = mn.Matrix4.look_at(
+                char_pos, char_pos + forward.normalized(), mn.Vector3(0.0, 1.0, 0.0)
+            )
+            coordinate_transform = mn.Matrix4.rotation(
+                mn.Rad(mn.math.pi), mn.Vector3(0.0, 1.0, 0.0)
+            )
+            final_transform = look_at_T.__matmul__(coordinate_transform)
+            # compute current frame from self.path_time w/ wrapping
+            motion_time_length = (
+                fairmotion_interface.Move.walk_to_walk.num_of_frames * (1.0 / 120.0)
+            )
+            mocap_time = math.fmod(self.path_time, motion_time_length)
+            mocap_frame = int(mocap_time * 120)
+
+            # print(f"motion_time_length = {motion_time_length}")
+            # print(f"self.path_time = {self.path_time}")
+            # print(f"mocap_frame = {mocap_frame}")
+
+            # TODO: apply mocap root drift
+
+            # TODO: apply mocap orientation
+
+            # apply joint angles
+            (
+                new_pose,
+                new_root_translate,
+                new_root_rotation,
+            ) = self.fm_demo.convert_CMUamass_single_pose(
+                self.fm_demo.motion.poses[mocap_frame], self.fm_demo.model2, raw=False
+            )
+            self.fm_demo.model2.joint_positions = new_pose
+
+            self.fm_demo.model2.transformation = final_transform
+
+    def debug_draw(self):
+        """
+        Additional draw commands to be called during draw_event.
+        """
+        # yellow = mn.Color4(1.0, 1.0, 0.0, 1.0)
+
+        if self.fm_demo is not None and self.fm_demo.model is not None:
+            # print(f"model 2 root = {self.fm_demo.model2.transformation}")
+            character_pos = self.fm_demo.model.translation
+            coordinate_transform = mn.Matrix4.rotation(
+                mn.Rad(mn.math.pi), mn.Vector3(0.0, 1.0, 0.0)
+            )
+            look_at_T = mn.Matrix4.look_at(
+                mn.Vector3(), character_pos, mn.Vector3(0.0, 1.0, 0.0)
+            )
+            final_transform = look_at_T.__matmul__(coordinate_transform)
+            # self.fm_demo.model2.transformation = final_transform
+            self.sim.get_debug_line_render().push_transform(final_transform)
+            self.draw_frame()
+            self.sim.get_debug_line_render().pop_transform()
+
+        # self.sim.get_debug_line_render().draw_circle(
+        #         cp.position_on_b_in_ws, 0.02, red
+        #     )
 
     def draw_event(self, simulation_call: Optional[Callable] = None) -> None:
         """
@@ -79,6 +186,7 @@ class FairmotionSimInteractiveViewer(HabitatSimInteractiveViewer):
                 self.fm_demo.next_pose()
                 self.fm_demo.next_pose()
                 self.fm_demo.update_pathfollower(step_size=2)
+            self.debug_path_follower()
 
         super().draw_event(simulation_call=play_motion)
 
@@ -107,8 +215,8 @@ class FairmotionSimInteractiveViewer(HabitatSimInteractiveViewer):
                 logger.warn("Warning: pathfinder not initialized, recompute navmesh")
             else:
                 logger.info("Command: shortest path between two random points")
-                path = self.find_short_path_from_two_points()
-                self.fm_demo.setup_pathfollower(path)
+                self.path = self.find_short_path_from_two_points()
+                self.fm_demo.setup_pathfollower(self.path)
 
         elif key == pressed.K:
             # Toggle Key Frames

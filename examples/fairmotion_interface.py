@@ -47,6 +47,7 @@ class FairmotionInterface:
         self.art_obj_mgr = self.sim.get_articulated_object_manager()
         self.rgd_obj_mgr = self.sim.get_rigid_object_manager()
         self.model: Optional[phy.ManagedArticulatedObject] = None
+        self.model2: Optional[phy.ManagedArticulatedObject] = None
         self.motion: Optional[motion.Motion] = None
         self.user_metadata = {}
         self.last_metadata_file: Optional[str] = None
@@ -271,13 +272,19 @@ class FairmotionInterface:
         self.model = self.art_obj_mgr.add_articulated_object_from_urdf(
             filepath=data["urdf_path"], fixed_base=True
         )
+        self.model2 = self.art_obj_mgr.add_articulated_object_from_urdf(
+            filepath=data["urdf_path"], fixed_base=True
+        )
         assert self.model.is_alive
 
         # change motion_type to KINEMATIC
         self.model.motion_type = phy.MotionType.KINEMATIC
+        self.model2.motion_type = phy.MotionType.KINEMATIC
 
         self.model.translation = self.translation_offset
         self.next_pose(repeat=True)
+        # set model2 to 1st state from mocap
+        self.model2.joint_positions = self.model.joint_positions
         logger.info("Done Loading.")
 
     def hide_model(self) -> None:
@@ -623,9 +630,9 @@ class FairmotionInterface:
         )
 
         # translation
-        drift_vector = Move.walk_to_walk.translation_drifts[curr_frame]
+        # drift_vector = Move.walk_to_walk.translation_drifts[curr_frame]
         forward_vector = Move.walk_to_walk.forward_displacements[curr_frame]
-        orientation_quat = Move.walk_to_walk.root_orientations[curr_frame]
+        # orientation_quat = Move.walk_to_walk.root_orientations[curr_frame]
 
         path_points = self.path_points
         sum_segment_len = 0
@@ -652,20 +659,22 @@ class FairmotionInterface:
                 path_pos = mn.Vector3(path_points[i]) + (d * segment)
                 path_pos += mn.Vector3(0.0, 1.0, 0.0)
 
-                look_at = mn.Quaternion.from_matrix(
-                    mn.Matrix4.look_at(
-                        mn.Vector3(path_points[i]),
-                        mn.Vector3(path_points[i + 1]),
-                        mn.Vector3(Move.walk_to_walk.motion.skel.v_up),
-                    ).rotation()
-                )
+                # self.model2.translation = path_pos
 
-                # 3. Add P-> to root_translation
-                self.model.translation = path_pos + look_at.transform_vector(
-                    drift_vector
-                )
-                self.model.rotation = look_at * orientation_quat
-                self.model.joint_positions = curr_pose
+                # look_at = mn.Quaternion.from_matrix(
+                #     mn.Matrix4.look_at(
+                #         mn.Vector3(path_points[i]),
+                #         mn.Vector3(path_points[i + 1]),
+                #         mn.Vector3(Move.walk_to_walk.motion.skel.v_up),
+                #     ).rotation()
+                # )
+
+                # # 3. Add P-> to root_translation
+                # self.model.translation = path_pos + look_at.transform_vector(
+                #     drift_vector
+                # )
+                # self.model.rotation = look_at * orientation_quat
+                # self.model.joint_positions = curr_pose
 
                 break
 
