@@ -334,7 +334,7 @@ jobs:
             conda install -y anaconda-client ccache cmake git ninja conda-build pip
             echo $(which -a python)
             pip install gitpython
-            <<^ parameters.CI_TEST>> anaconda login --username << parameters.AIHABITAT_CONDA_CHN >>  --password $<< parameters.AIHABITAT_CONDA_CHN_PWD_VAR >>
+            yes | <<^ parameters.CI_TEST>> anaconda login --username << parameters.AIHABITAT_CONDA_CHN >>  --password $<< parameters.AIHABITAT_CONDA_CHN_PWD_VAR >>
             conda config --set anaconda_upload yes <</ parameters.CI_TEST>>
             cd habitat-sim/conda-build
             git submodule update --init --recursive --jobs 16
@@ -701,13 +701,26 @@ workflows:
       - python_lint
       - js_lint
       - lab_build_habitat
-      - build_conda_osx:
-         CI_TEST: true
-      - test_pip_build
       - install_and_test_ubuntu
-      - pre-commit
       - build_conda_binaries:
-          CI_TEST: true
+          AIHABITAT_CONDA_CHN: aihabitat-nightly
+          AIHABITAT_CONDA_CHN_PWD_VAR: AIHABITAT_NIGHTLY_CONDA_PWD
+          NIGHTLY_FLAG: "--nightly"
+          requires:
+            - install_and_test_ubuntu
+          filters:
+            branches:
+              only: main
+      - build_conda_osx:
+          AIHABITAT_CONDA_CHN: aihabitat-nightly
+          AIHABITAT_CONDA_CHN_PWD_VAR: AIHABITAT_NIGHTLY_CONDA_PWD
+          nightly: true
+          CI_TEST: false
+          requires:
+            - build_conda_binaries
+          filters:
+            branches:
+              only: main
   nightly:
     triggers:
       - schedule:
