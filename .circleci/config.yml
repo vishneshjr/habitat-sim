@@ -715,9 +715,6 @@ workflows:
           CI_TEST: false
           requires:
             - build_conda_binaries
-          filters:
-            branches:
-              only: main
   nightly:
     triggers:
       - schedule:
