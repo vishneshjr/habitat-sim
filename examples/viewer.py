@@ -17,6 +17,7 @@ import magnum as mn
 from magnum.platform.glfw import Application
 
 import habitat_sim
+import habitat_sim.utils.sim_utils as sutils
 from examples.settings import default_sim_settings, make_cfg
 from habitat_sim import physics
 from habitat_sim.logging import LoggingContext, logger
@@ -30,6 +31,7 @@ class HabitatSimInteractiveViewer(Application):
         self.sim_settings: Dict[str:Any] = sim_settings
         self.fps: float = 60.0
         self.debug_bullet_draw = False
+        self.debug_contact_draw = False
         # cache most recently loaded URDF file for quick-reload
         self.cached_urdf = ""
 
@@ -102,6 +104,8 @@ class HabitatSimInteractiveViewer(Application):
             render_cam = self.render_camera.render_camera
             proj_mat = render_cam.projection_matrix.__matmul__(render_cam.camera_matrix)
             self.sim.debug_draw(proj_mat)
+        if self.debug_contact_draw:
+            sutils.debug_draw_contact_points(self.sim)
 
     def draw_event(
         self,
@@ -330,8 +334,16 @@ class HabitatSimInteractiveViewer(Application):
                 logger.info("Command: physics step taken")
 
         elif key == pressed.COMMA:
-            self.debug_bullet_draw = not self.debug_bullet_draw
-            logger.info(f"Command: toggle Bullet debug draw: {self.debug_bullet_draw}")
+            if shift_pressed:
+                self.debug_contact_draw = not self.debug_contact_draw
+                logger.info(
+                    f"Command: toggle contact point debug draw: {self.debug_contact_draw}"
+                )
+            else:
+                self.debug_bullet_draw = not self.debug_bullet_draw
+                logger.info(
+                    f"Command: toggle Bullet debug draw: {self.debug_bullet_draw}"
+                )
 
         elif key == pressed.T:
             # load URDF
