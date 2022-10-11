@@ -7,6 +7,7 @@
 #include <Corrade/Utility/Algorithms.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
 #include <Magnum/Math/Vector.h>
+#include <Magnum/MeshTools/Compile.h>
 #include <Magnum/MeshTools/Interleave.h>
 #include <Magnum/MeshTools/Reference.h>
 #include <Magnum/Primitives/Cone.h>
@@ -288,8 +289,8 @@ void VoxelGrid::generateMeshDataAndMeshGL(
   if (meshGLDict_.find(gridName) != meshGLDict_.end()) {
     meshGLDict_[gridName] = Mn::MeshTools::compile(*meshDataDict_[gridName]);
   } else {
-    meshGLDict_.insert(std::make_pair(
-        gridName, Mn::MeshTools::compile(*meshDataDict_[gridName])));
+    meshGLDict_.emplace(gridName,
+                        Mn::MeshTools::compile(*meshDataDict_[gridName]));
   }
 }
 

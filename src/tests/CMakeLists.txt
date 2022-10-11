@@ -1,7 +1,13 @@
 find_package(Magnum REQUIRED DebugTools AnyImageConverter AnySceneImporter)
 find_package(
-  MagnumPlugins REQUIRED GltfImporter StbImageImporter KtxImporter
-  OPTIONAL_COMPONENTS GltfSceneConverter KtxImageConverter
+  MagnumPlugins
+  REQUIRED
+  GltfImporter
+  StbImageImporter
+  KtxImporter
+  # Disabled for now as the OPTIONAL component with a CMake subproject causes a
+  # CMake error. TODO: fix in the Find module
+  #OPTIONAL_COMPONENTS GltfSceneConverter KtxImageConverter
 )
 
 # If the GltfSceneConverter is present, the new Magnum SceneConverter APIs are
@@ -115,11 +121,19 @@ corrade_add_test(
   LIBRARIES
   core
   nav
+  io
   assets
 )
 target_include_directories(NavTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
-corrade_add_test(PathFinderTest PathFinderTest.cpp LIBRARIES nav Corrade::Utility)
+corrade_add_test(
+  PathFinderTest
+  PathFinderTest.cpp
+  LIBRARIES
+  nav
+  io
+  Corrade::Utility
+)
 target_include_directories(PathFinderTest PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 corrade_add_test(PhysicsTest PhysicsTest.cpp LIBRARIES physics)

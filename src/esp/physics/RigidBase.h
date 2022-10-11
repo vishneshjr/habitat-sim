@@ -11,6 +11,7 @@
 #include "esp/core/Esp.h"
 #include "esp/geo/VoxelWrapper.h"
 #include "esp/metadata/attributes/AttributesBase.h"
+#include "esp/metadata/attributes/ObjectAttributes.h"
 #include "esp/physics/PhysicsObjectBase.h"
 
 /** @file
@@ -21,11 +22,6 @@ namespace esp {
 namespace assets {
 class ResourceManager;
 }
-namespace metadata {
-namespace attributes {
-class AbstractObjectAttributes;
-}  // namespace attributes
-}  // namespace metadata
 
 namespace physics {
 
@@ -61,7 +57,8 @@ class RigidBase : public esp::physics::PhysicsObjectBase {
    * @return true if initialized successfully, false otherwise.
    */
   virtual bool initialize(
-      metadata::attributes::AbstractObjectAttributes::ptr initAttributes) = 0;
+      std::shared_ptr<metadata::attributes::AbstractObjectAttributes>
+          initAttributes) = 0;
 
   /**
    * @brief Finalize the creation of @ref RigidObject or @ref
@@ -205,6 +202,38 @@ class RigidBase : public esp::physics::PhysicsObjectBase {
    */
   virtual void setFrictionCoefficient(
       CORRADE_UNUSED const double frictionCoefficient) {}
+
+  /** @brief Get the scalar rolling friction coefficient of the object. Only
+   * used for dervied dynamic implementations of @ref RigidObject.
+   * @return The scalar rolling friction coefficient of the object. Damps
+   * angular velocity about axis orthogonal to the contact normal to prevent
+   * rounded shapes from rolling forever.
+   */
+  virtual double getRollingFrictionCoefficient() const { return 0.0; }
+
+  /** @brief Set the scalar rolling friction coefficient of the object. Only
+   * used for dervied dynamic implementations of @ref RigidObject.
+   * @param rollingFrictionCoefficient The new scalar rolling friction
+   * coefficient of the object. Damps angular velocity about axis orthogonal to
+   * the contact normal to prevent rounded shapes from rolling forever.
+   */
+  virtual void setRollingFrictionCoefficient(
+      CORRADE_UNUSED const double rollingFrictionCoefficient) {}
+
+  /** @brief Get the scalar spinning friction coefficient of the object. Only
+   * used for dervied dynamic implementations of @ref RigidObject.
+   * @return The scalar spinning friction coefficient of the object. Damps
+   * angular velocity about the contact normal.
+   */
+  virtual double getSpinningFrictionCoefficient() const { return 0.0; }
+
+  /** @brief Set the scalar spinning friction coefficient of the object. Only
+   * used for dervied dynamic implementations of @ref RigidObject.
+   * @param spinningFrictionCoefficient The new scalar friction coefficient of
+   * the object. Damps angular velocity about the contact normal.
+   */
+  virtual void setSpinningFrictionCoefficient(
+      CORRADE_UNUSED const double spinningFrictionCoefficient) {}
 
   /** @brief Get the 3x3 inertia matrix for an object.
    * @return The object's 3x3 inertia matrix.

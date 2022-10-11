@@ -65,8 +65,8 @@ void Recorder::onCreateRenderAssetInstance(
                                  : nodeScale;
   }
 
-  getKeyframe().creations.emplace_back(
-      std::make_pair(instanceKey, adjustedCreation));
+  getKeyframe().creations.emplace_back(instanceKey,
+                                       std::move(adjustedCreation));
 
   // Constructing NodeDeletionHelper here is equivalent to calling
   // node->addFeature. We keep a pointer to deletionHelper so we can delete it
@@ -94,6 +94,16 @@ void Recorder::addUserTransformToKeyframe(const std::string& name,
                                           const Magnum::Vector3& translation,
                                           const Magnum::Quaternion& rotation) {
   getKeyframe().userTransforms[name] = Transform{translation, rotation};
+}
+
+void Recorder::addLightToKeyframe(const LightInfo& lightInfo) {
+  getKeyframe().lightsChanged = true;
+  getKeyframe().lights.emplace_back(lightInfo);
+}
+
+void Recorder::clearLightsFromKeyframe() {
+  getKeyframe().lightsChanged = true;
+  getKeyframe().lights.clear();
 }
 
 void Recorder::addLoadsCreationsDeletions(KeyframeIterator begin,
