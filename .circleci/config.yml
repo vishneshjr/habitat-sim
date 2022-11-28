@@ -438,7 +438,7 @@ jobs:
               touch ~/miniconda/pip_deps_installed
       - run:
           name: Run Habitat Lab tests
-          no_output_timeout: 25m
+          no_output_timeout: 50m
           command: |
               export PATH=$HOME/miniconda/bin:$PATH
               . activate habitat; cd habitat-lab
