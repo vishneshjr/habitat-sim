@@ -428,10 +428,11 @@ jobs:
               #Rebuild headless
               python setup.py install --headless --with-bullet --with-cuda --vhacd
               cd ..
-              if [ ! -d ./habitat-lab ]
+              if [ -d ./habitat-lab ]
               then
-                git clone -q --depth 1 https://github.com/facebookresearch/habitat-lab.git
+                rm -rf ./habitat-lab
               fi
+              git clone -q --depth 1 https://github.com/facebookresearch/habitat-lab.git
               cd habitat-lab
               pip install -r habitat-lab/requirements.txt --progress-bar off
               ln -s ../habitat-sim/data data
