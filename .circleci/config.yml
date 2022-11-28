@@ -440,13 +440,14 @@ jobs:
           name: Run Habitat Lab tests
           no_output_timeout: 50m
           command: |
+              export HABITAT_ENV_DEBUG=1
               export PATH=$HOME/miniconda/bin:$PATH
               . activate habitat; cd habitat-lab
               pip install -e habitat-lab
               pip install -e habitat-baselines
               export PYTHONPATH=.:$PYTHONPATH
               export MULTI_PROC_OFFSET=0 && export MAGNUM_LOG=quiet && export HABITAT_SIM_LOG=quiet
-              python -m pytest
+              python -m pytest -s
       - save_cache:
           key: habitat-lab-{{ checksum "./hablab_sha" }}
           background: true
