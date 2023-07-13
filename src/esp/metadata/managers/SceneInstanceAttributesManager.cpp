@@ -74,25 +74,26 @@ void SceneInstanceAttributesManager::setValsFromJSONDoc(
     // No stage_instance specified in SceneInstance configuration.
     // We expect a scene instance to be present always, except for the default
     // Scene Dataset that is empty.
-    if (attribsDispName == "default_attributes") {
-      // Default attributes is empty
-      ESP_DEBUG(Mn::Debug::Flag::NoSpace)
-          << "No Stage Instance specified in Default Scene Instance, so "
-             "setting empty/NONE Stage as Stage instance.";
-      SceneObjectInstanceAttributes::ptr instanceAttrs =
-          createEmptyInstanceAttributes("");
-      // Set to use none stage
-      instanceAttrs->setHandle("NONE");
-      attribs->setStageInstance(instanceAttrs);
-    } else {
-      // no stage instance exists in Scene Instance config JSON. This should not
-      // happen and would indicate an error in the dataset.
-      ESP_CHECK(false,
-                "No JSON cell `stage_instance` specified in Scene Instance `"
-                    << Mn::Debug::nospace << attribsDispName
-                    << Mn::Debug::nospace
-                    << "` so no Stage can be created for this Scene.");
-    }
+    // if (attribsDispName == "default_attributes") {
+    //   // Default attributes is empty
+    //   ESP_DEBUG(Mn::Debug::Flag::NoSpace)
+    //       << "No Stage Instance specified in Default Scene Instance, so "
+    //          "setting empty/NONE Stage as Stage instance.";
+    //   SceneObjectInstanceAttributes::ptr instanceAttrs =
+    //       createEmptyInstanceAttributes("");
+    //   // Set to use none stage
+    //   instanceAttrs->setHandle("NONE");
+    //   attribs->setStageInstance(instanceAttrs);
+    // } else {
+    //   // no stage instance exists in Scene Instance config JSON. This should
+    //   not
+    //   // happen and would indicate an error in the dataset.
+    //   ESP_CHECK(false,
+    //             "No JSON cell `stage_instance` specified in Scene Instance `"
+    //                 << Mn::Debug::nospace << attribsDispName
+    //                 << Mn::Debug::nospace
+    //                 << "` so no Stage can be created for this Scene.");
+    // }
   }
 
   // Check for object instances existence
